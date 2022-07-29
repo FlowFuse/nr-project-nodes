@@ -49,10 +49,8 @@ If these are missing, the node will NOT be loaded.
 ```
     flowForge: {
         forgeURL: 'http://xxxxxxxxx:3000',
-        storageURL: 'http://xxxxxxxxx:3000/storage',
         teamID:  'xxxxxxxx',
         projectID: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
-        deviceID: '',
         projectLink: {
             token: 'fft_xxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
             broker: {
