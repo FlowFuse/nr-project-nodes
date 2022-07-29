@@ -128,7 +128,6 @@ module.exports = function (RED) {
             teamID: topicParts[2],
             type: projectOrDevice,
             projectID: topicParts[4],
-            deviceID: projectOrDevice === 'd' ? topicParts[4] : null,
             isBroadcast,
             isCallResponse,
             subTopic: topicParts.slice(6).join('/')
@@ -355,7 +354,6 @@ module.exports = function (RED) {
                 subOptions.properties = Object.assign({}, options.properties)
                 subOptions.properties.userProperties = subOptions.properties.userProperties || {}
                 subOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID
-                subOptions.properties.userProperties._deviceID = RED.settings.flowforge.deviceID
                 subOptions.properties.userProperties._nodeID = node.id
                 subOptions.properties.userProperties._ts = Date.now()
                 const subscribePromise = function (topic, subOptions) {
@@ -417,7 +415,6 @@ module.exports = function (RED) {
                 pubOptions.properties = Object.assign({}, options.properties)
                 pubOptions.properties.userProperties = pubOptions.properties.userProperties || {}
                 pubOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID
-                pubOptions.properties.userProperties._deviceID = RED.settings.flowforge.deviceID
                 pubOptions.properties.userProperties._nodeID = node.id
                 pubOptions.properties.userProperties._publishTime = new Date()
                 pubOptions.properties.contentType = 'application/json'
