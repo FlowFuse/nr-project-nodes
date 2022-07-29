@@ -2,7 +2,7 @@ module.exports = function (RED) {
     'use strict'
 
     // Do not register nodes in runtime if settings not provided
-    if (!RED.settings.flowForge || !RED.settings.flowForge.projectID || !RED.settings.flowForge.teamID || !RED.settings.flowForge.projectLink) {
+    if (!RED.settings.flowforge || !RED.settings.flowforge.projectID || !RED.settings.flowforge.teamID || !RED.settings.flowforge.projectLink) {
         RED.log.warn('Project Link Nodes require flowforge settings')
         return
     }
@@ -137,7 +137,7 @@ module.exports = function (RED) {
     }
 
     function buildLinkTopic (node, project, subTopic, isCallResponse) {
-        const topicParts = [TOPIC_HEADER, TOPIC_VERSION, RED.settings.flowForge.teamID]
+        const topicParts = [TOPIC_HEADER, TOPIC_VERSION, RED.settings.flowforge.teamID]
         if (node.type === 'project link in') {
             topicParts.push('p')
             if (project === 'broadcast') {
@@ -150,7 +150,7 @@ module.exports = function (RED) {
         } else if (node.type === 'project link out') {
             topicParts.push('p')
             if (project === 'broadcast') {
-                topicParts.push(RED.settings.flowForge.projectID)
+                topicParts.push(RED.settings.flowforge.projectID)
                 topicParts.push('out')
             } else {
                 topicParts.push(project)
@@ -354,8 +354,8 @@ module.exports = function (RED) {
                 subOptions.qos = subOptions.qos == null ? 1 : subOptions.qos
                 subOptions.properties = Object.assign({}, options.properties)
                 subOptions.properties.userProperties = subOptions.properties.userProperties || {}
-                subOptions.properties.userProperties._projectID = RED.settings.flowForge.projectID
-                subOptions.properties.userProperties._deviceID = RED.settings.flowForge.deviceID
+                subOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID
+                subOptions.properties.userProperties._deviceID = RED.settings.flowforge.deviceID
                 subOptions.properties.userProperties._nodeID = node.id
                 subOptions.properties.userProperties._ts = Date.now()
                 const subscribePromise = function (topic, subOptions) {
@@ -416,8 +416,8 @@ module.exports = function (RED) {
                 pubOptions.qos = pubOptions.qos == null ? 1 : pubOptions.qos
                 pubOptions.properties = Object.assign({}, options.properties)
                 pubOptions.properties.userProperties = pubOptions.properties.userProperties || {}
-                pubOptions.properties.userProperties._projectID = RED.settings.flowForge.projectID
-                pubOptions.properties.userProperties._deviceID = RED.settings.flowForge.deviceID
+                pubOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID
+                pubOptions.properties.userProperties._deviceID = RED.settings.flowforge.deviceID
                 pubOptions.properties.userProperties._nodeID = node.id
                 pubOptions.properties.userProperties._publishTime = new Date()
                 pubOptions.properties.contentType = 'application/json'
@@ -456,20 +456,20 @@ module.exports = function (RED) {
                             requestResponseInformation: true,
                             requestProblemInformation: true,
                             userProperties: {
-                                project: RED.settings.flowForge.projectID || ''
+                                project: RED.settings.flowforge.projectID || ''
                             }
                         }
                     }
                     options = Object.assign({}, defaultOptions, options)
 
-                    if (RED.settings.flowForge.projectLink.broker.clientId) {
-                        options.clientId = RED.settings.flowForge.projectLink.broker.clientId + ':n'
+                    if (RED.settings.flowforge.projectLink.broker.clientId) {
+                        options.clientId = RED.settings.flowforge.projectLink.broker.clientId + ':n'
                     }
-                    if (RED.settings.flowForge.projectLink.broker.username) {
-                        options.username = RED.settings.flowForge.projectLink.broker.username
+                    if (RED.settings.flowforge.projectLink.broker.username) {
+                        options.username = RED.settings.flowforge.projectLink.broker.username
                     }
-                    if (RED.settings.flowForge.projectLink.broker.password) {
-                        options.password = RED.settings.flowForge.projectLink.broker.password
+                    if (RED.settings.flowforge.projectLink.broker.password) {
+                        options.password = RED.settings.flowforge.projectLink.broker.password
                     }
                     connAck.properties = null
                     connAck.reasonCode = null
@@ -477,7 +477,7 @@ module.exports = function (RED) {
 
                     connecting = true
                     // TEMP for dev testing
-                    const url = RED.settings.flowForge.projectLink.broker.url || 'mqtt://localhost:1883'
+                    const url = RED.settings.flowforge.projectLink.broker.url || 'mqtt://localhost:1883'
                     client = MQTT.connect(url, options)
                     on('connect', onConnect)
                     on('error', onError)
@@ -816,11 +816,11 @@ module.exports = function (RED) {
 
     // Endpoint for querying list of projects in node UI
     RED.httpAdmin.get('/nr-project-link/projects', RED.auth.needsPermission('flows.write'), async function (_req, res) {
-        const url = `${RED.settings.flowForge.forgeURL}/api/${API_VERSION}/teams/${RED.settings.flowForge.teamID}/projects`
+        const url = `${RED.settings.flowforge.forgeURL}/api/${API_VERSION}/teams/${RED.settings.flowforge.teamID}/projects`
         try {
             const data = await got.get(url, {
                 apiH: {
-                    authorization: `Bearer ${RED.settings.flowForge.projectLink.token}`
+                    authorization: `Bearer ${RED.settings.flowforge.projectLink.token}`
                 },
                 timeout: {
                     request: 4000
