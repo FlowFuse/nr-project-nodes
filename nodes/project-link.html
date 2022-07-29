@@ -82,7 +82,6 @@
     }
 
     function onEditPrepare (node, targetType) {
-        console.log('onEditPrepare')
         loadProjectList('#node-input-projectList', node.project, targetType || node.type)
         $('#node-input-name').val(node.name)
         $('#node-input-topic').val(node.topic)
