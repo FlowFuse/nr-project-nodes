@@ -1,58 +1,65 @@
+<style>
+    #dialog-form > div.form-row > .node-input-width {
+        width: calc(100% - 125px);
+    }
+</style>
+
 <script type="text/html" data-template-name="project link in">
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name">Name</span></label>
-        <input type="text" id="node-input-name">
+        <input type="text" id="node-input-name" class="node-input-width">
     </div>
     <div class="form-row">
-        <label for="node-input-projectList"><ass="fa fa-external-link"><> <span>Source</span></label>
-        <select id="node-input-projectList" style="width: 70%">
+        <label for="node-input-projectList"><i class="fa fa-sign-in"></i> <span>Source</span></label>
+        <select id="node-input-projectList" class="node-input-width">
         </select>
     </div>
     <div class="form-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
-        <input type="text" id="node-input-topic">
+        <input type="text" id="node-input-topic" class="node-input-width">
     </div>
 
 </script>
 <script type="text/html" data-template-name="project link out">
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name">Name</span></label>
-        <input type="text" id="node-input-name">
+        <input type="text" id="node-input-name" class="node-input-width">
     </div>
     <div class="form-row">
         <label for="node-input-mode"><i class="fa fa-cog"></i> <span>Mode</span></label>
-        <select id="node-input-mode" style="width: 70%">
+        <select id="node-input-mode" class="node-input-width">
             <option value="link" selected>Send to specified project node</option>
             <option value="return">Return to project link call</option>
         </select>
     </div>
     <div class="form-row project-list-row">
-        <label for="node-input-projectList"><i class="fa fa-external-link"></i> <span>Target</span></label>
-        <select id="node-input-projectList" style="width: 70%">
+        <label for="node-input-projectList"><i class="fa fa-sign-out"></i> <span>Target</span></label>
+        <select id="node-input-projectList" class="node-input-width">
         </select>
     </div>
     <div class="form-row link-topic-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
-        <input type="text" id="node-input-topic">
+        <input type="text" id="node-input-topic" class="node-input-width">
     </div>
 </script>
 <script type="text/html" data-template-name="project link call">
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name">Name</span></label>
-        <input type="text" id="node-input-name">
+        <input type="text" id="node-input-name" class="node-input-width">
     </div>
     <div class="form-row">
         <label for="node-input-timeout"><i class="fa fa-clock-o"></i> <span data-i18n="exec.label.timeout"></span>Timeout</label>
-        <input type="text" id="node-input-timeout" placeholder="30" style="width: 70px; margin-right: 5px;"><span data-i18n="inject.seconds">sec</span>
+        <input type="text" id="node-input-timeout" placeholder="30" style="width: 80px; margin-right: 5px;">
+        <span data-i18n="inject.seconds">sec</span>
     </div>
     <div class="form-row">
-        <label for="node-input-projectList"><i class="fa fa-external-link-square"></i> <span>Target</span></label>
-        <select id="node-input-projectList" style="width: 70%">
+        <label for="node-input-projectList"><i class="fa fa-sign-out"></i> <span>Target</span></label>
+        <select id="node-input-projectList" class="node-input-width">
         </select>
     </div>
     <div class="form-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
-        <input type="text" id="node-input-topic">
+        <input type="text" id="node-input-topic" class="node-input-width">
     </div>
 </script>
 
