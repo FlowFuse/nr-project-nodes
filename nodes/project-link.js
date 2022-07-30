@@ -3,7 +3,7 @@ module.exports = function (RED) {
 
     // Do not register nodes in runtime if settings not provided
     if (!RED.settings.flowforge || !RED.settings.flowforge.projectID || !RED.settings.flowforge.teamID || !RED.settings.flowforge.projectLink) {
-        RED.log.warn('Project Link Nodes require flowforge settings')
+        RED.log.warn('Project Link nodes require flowforge settings')
         return
     }
 
@@ -226,7 +226,8 @@ module.exports = function (RED) {
                 cb && cb(err, topic, msg, packet)
             })
         }
-        function onError (_error) {
+        function onError (err) {
+            RED.log.trace(`Project Link nodes connection error: ${err.message}`)
             allNodes.forEach(node => {
                 try {
                     node.status({ fill: 'red', shape: 'dot', text: 'error' })
@@ -240,6 +241,7 @@ module.exports = function (RED) {
             connected = true
             connecting = false
             closing = false
+            RED.log.info('Project Link nodes connected')
             allNodes.forEach(node => {
                 try {
                     node.status({ fill: 'green', shape: 'dot', text: 'connected' })
@@ -247,9 +249,10 @@ module.exports = function (RED) {
             })
         }
         function onReconnect () {
+            RED.log.trace('Project Link nodes reconnecting')
             allNodes.forEach(node => {
                 try {
-                    node.status({ fill: 'yellow', shape: 'dot', text: 'connecting' })
+                    node.status({ fill: 'yellow', shape: 'dot', text: 'reconnecting' })
                 } catch (error) { /* do nothing */ }
             })
         }
@@ -266,6 +269,7 @@ module.exports = function (RED) {
             connected = false
             connecting = false
             closing = false
+            RED.log.warn('Project Link nodes disconnected')
             allNodes.forEach(node => {
                 try {
                     node.status({ fill: 'red', shape: 'dot', text: 'disconnected' })
@@ -275,6 +279,7 @@ module.exports = function (RED) {
         // Register disconnect handlers
         function onClose (err) {
             if (err instanceof Error) {
+                RED.log.trace(`Project link connection closed: ${err.message}`)
                 allNodes.forEach(node => {
                     try {
                         node.status({ fill: 'red', shape: 'dot', text: 'error' })
@@ -287,6 +292,7 @@ module.exports = function (RED) {
                 if (err) {
                     return // status already updated to error above!
                 }
+                RED.log.info('Project Link nodes connection closed')
                 allNodes.forEach(node => {
                     try {
                         node.status({ fill: 'gray', shape: 'dot', text: 'closed' })
@@ -297,6 +303,7 @@ module.exports = function (RED) {
                 if (err) {
                     return // status already updated to error above!
                 }
+                RED.log.trace('Project Link nodes connect failed')
                 allNodes.forEach(node => {
                     try {
                         node.status({ fill: 'red', shape: 'dot', text: 'connect failed' })
@@ -590,8 +597,7 @@ module.exports = function (RED) {
             }
             // check for error in processing the payload+packet → msg
             if (err) {
-                // TODO: node status
-                node.error(err)
+                node.error(err, msg)
                 return
             }
             node.receive(msg)
@@ -600,6 +606,7 @@ module.exports = function (RED) {
         mqtt.subscribe(node, topic, { qos: 2 }, onSub)
             .then(_result => {})
             .catch(err => {
+                node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
                 node.error(err)
             })
 
@@ -705,7 +712,7 @@ module.exports = function (RED) {
             }
             // check for error in processing the payload+packet → msg
             if (err) {
-                node.error(err)
+                node.error(err, msg)
                 return
             }
             const eventId = packet.properties && packet.properties.correlationData.toString()
@@ -719,6 +726,7 @@ module.exports = function (RED) {
         mqtt.subscribe(node, responseTopic, { qos: 2 }, onSub)
             .then(_result => {})
             .catch(err => {
+                node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
                 node.error(err)
             })
 
@@ -797,7 +805,7 @@ module.exports = function (RED) {
                     node.send(msg)
                 }
             } catch (error) {
-                node.error(error)
+                node.error(error, msg)
             }
         }
 
