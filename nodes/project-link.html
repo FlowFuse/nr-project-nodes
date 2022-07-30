@@ -287,3 +287,96 @@
     })
 })()
 </script>
+
+<script type="text/html" data-help-name="project link in">
+    <p>Receive messages from other projects</p>
+    <h3>Properties</h3>
+    <dl class="message-properties">
+        <dt><i>source</i></dt>
+        <dd>
+            The project to watch for messages
+        </dd>
+        <dt><i>path</i> <span class="property-type">string</span></dt>
+        <dd>
+            A free form, slash separated path that identifies this link. 
+            Example: a path of 'sensor/temperature' would receive message sent from a 
+            Project Link Out or Project Link Call with the same <code>target</code> 
+            and <code>path</code>.
+        </dd>
+    </dl>
+    <h3>Output</h3>
+    <dl class="message-properties">
+        <dt><i>msg</i> <span class="property-type">object</span></dt>
+        <dd>
+            The <code>msg</code> object sent from a Project Link Out or Project Link 
+            Call with the same <code>target</code> and <code>path</code>
+        </dd>
+    </dl>
+</script>
+
+<script type="text/html" data-help-name="project link out">
+    <p>Send messages to other projects</p>
+    <h3>Properties</h3>
+    <dl class="message-properties">
+        <dt><i>mode</i></dt>
+        <dd>
+            The operational mode of this node can be set to either send messages to a 
+            specific <code>project</code> and <code>path</code> or return a message that 
+            originated from a Project Link Call node
+        </dd>
+        <dt><i>target</i></dt>
+        <dd>
+            The project to send messages to
+        </dd>
+        <dt><i>path</i> <span class="property-type">string</span></dt>
+        <dd>
+            A free form, slash separated path that identifies this link. 
+            Example: a path of <code>sensor/temperature</code> would send messages to 
+            the <code>target</code> project where a link node has a matching path
+        </dd>
+    </dl>
+    <h3>Input</h3>
+    <dl class="message-properties">
+        <dt><i>msg</i> <span class="property-type">object</span></dt>
+        <dd>
+            The message to send to the <code>target</code> project <code>path</code>
+        </dd>
+    </dl>
+</script>
+
+<script type="text/html" data-help-name="project link call">
+    <p>Send messages to other projects and get a response</p>
+    <h3>Properties</h3>
+    <dl class="message-properties">
+        <dt><i>timeout</i><span class="property-type">number</span></dt>
+        <dd>
+            The number of seconds to wait for the sent <code>msg</code> to be returned
+            before raising a <code>timeout</code> error
+        </dd>
+        <dt><i>target</i></dt>
+        <dd>
+            The project to send messages to
+        </dd>
+        <dt><i>path</i> <span class="property-type">string</span></dt>
+        <dd>
+            A free form, slash separated path that identifies this link. 
+            Example: a path of <code>sensor/temperature</code> would send messages to 
+            the <code>target</code> project where a link node has a matching path
+        </dd>
+    </dl>
+    <h3>Input</h3>
+    <dl class="message-properties">
+        <dt><i>msg</i> <span class="property-type">object</span></dt>
+        <dd>
+            The message to send to the <code>target</code> project <code>path</code>
+        </dd>
+    </dl>
+    <h3>Output</h3>
+    <dl class="message-properties">
+        <dt><i>msg</i> <span class="property-type">object</span></dt>
+        <dd>
+            The <code>msg</code> object sent from a Project Link Out node set to
+            <code>return</code> mode
+        </dd>
+    </dl>
+</script>
