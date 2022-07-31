@@ -72,13 +72,13 @@ module.exports = function (RED) {
     }
 
     function jsonReplacer (_key, value) {
-        const wrapper = (dataType, value) => { return { dataType, value } }
-        if (Buffer.isBuffer(value)) {
-            return wrapper('Buffer', value.toJSON())
-        } else if (typeof value === 'undefined') {
+        const wrapper = (type, data) => { return { type: type, data: data } }
+        if (typeof value === 'undefined') {
             return wrapper('undefined', '')
         } else if (typeof value === 'bigint') {
             return wrapper('bigint', value.toString())
+        } else if (typeof value === 'function') {
+            return wrapper('function', value.toString())
         } else if (typeof value === 'object' && value !== null) {
             // NOTE: Map and Set objects that are built in a function VM do NOT
             // evaluate to true when tested for instanceof Map or Set. Instead
@@ -87,24 +87,28 @@ module.exports = function (RED) {
                 return wrapper('Map', [...value])
             } else if (value instanceof Set || (value.constructor.name === 'Set' && value.values)) {
                 return wrapper('Set', [...value])
-            }
+            } else if (Buffer.isBuffer(value) || (value.constructor.name === 'Buffer')) {
+                return value.toJSON()
+            } 
         }
         return value
     }
 
     function jsonReviver (_key, value) {
-        if (typeof value === 'object' && value !== null && value.value !== undefined) {
-            if (value.dataType === 'undefined') {
+        if (typeof value === 'object' && value !== null && value.data !== undefined) {
+            if (value.type === 'undefined') {
                 // return undefined //doesn't work - returning undefined delete the property
                 return null // side effect: undefined becomes null
-            } else if (value.dataType === 'Buffer') {
-                return Buffer.from(value.value)
-            } else if (value.dataType === 'bigint') {
-                return BigInt(value.value)
-            } else if (value.dataType === 'Map') {
-                return new Map(value.value)
-            } else if (value.dataType === 'Set') {
-                return new Set(value.value)
+            } else if (value.type === 'Buffer') {
+                return Buffer.from(value.data)
+            } else if (value.type === 'bigint') {
+                return BigInt(value.data)
+            } else if (value.type === 'Map') {
+                return new Map(value.data)
+            } else if (value.type === 'Set') {
+                return new Set(value.data)
+            } else if (value.type === 'function') {
+                return new Function('return ' + value.data)()
             }
         }
         return value
