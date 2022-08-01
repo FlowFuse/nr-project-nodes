@@ -2,7 +2,6 @@
     "name": "@flowforge/nr-project-nodes",
     "version": "0.1.0",
     "description": "A set of Node-RED nodes for seamless 2-way inter-project messaging",
-    "main": "index.js",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
     },
