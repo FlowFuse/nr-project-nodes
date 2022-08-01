@@ -163,12 +163,6 @@
             this.name = ''
             RED.actions.invoke('core:generate-node-names', this, { generateHistory: false })
         }
-        for (let i = 0; i < this.links.length; i++) {
-            const n = RED.nodes.node(this.links[i])
-            if (n && n.links.indexOf(this.id) === -1) {
-                n.links.push(this.id)
-            }
-        }
     }
 
     RED.nodes.registerType('project link in', {
