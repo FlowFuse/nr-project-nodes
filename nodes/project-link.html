@@ -2,6 +2,16 @@
     #dialog-form > div.form-row > .node-input-width {
         width: calc(100% - 125px);
     }
+    #dialog-form > div.form-row > span.project-link-group-option > input {
+        width: auto;
+        display: inline-block;
+        vertical-align: middle;
+        margin: 0px 2px 2px 0px;
+    }
+    #dialog-form > div.form-row > span.project-link-group-option > label {
+        width: 250px;
+        display: inline-block;
+    }
 </style>
 
 <script type="text/html" data-template-name="project link in">
@@ -9,17 +19,31 @@
         <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name">Name</span></label>
         <input type="text" id="node-input-name" class="node-input-width">
     </div>
-    <div class="form-row">
-        <label for="node-input-projectList"><i class="fa fa-sign-in"></i> <span>Source</span></label>
-        <select id="node-input-projectList" class="node-input-width">
+    <div class="form-row project-list-row">
+        <label><i class="fa fa-sign-in"></i> <span>Source</span></label>
+        <span class="project-link-group-option">
+            <input type="radio" id="radio-input-direct" name="broadcast" value="false" checked />
+            <label for="radio-input-direct">Receive messages sent to this project</label>
+        </span>
+    </div>
+    <div class="form-row project-list-row">
+        <label><span>&nbsp</span></label>
+        <span class="project-link-group-option">
+            <input type="radio" id="radio-input-broadcast" name="broadcast" value="true" />
+            <label for="radio-input-broadcast">Listen for broadcast messages from</label>
+        </span>
+    </div>
+    <div class="form-row project-list-row">
+        <label><span>&nbsp</span></label>
+        <select id="node-input-projectList" class="node-input-width" disabled>
         </select>
     </div>
     <div class="form-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
         <input type="text" id="node-input-topic" class="node-input-width">
     </div>
-
 </script>
+
 <script type="text/html" data-template-name="project link out">
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name">Name</span></label>
@@ -32,10 +56,25 @@
             <option value="return">Return to project link call</option>
         </select>
     </div>
+
     <div class="form-row project-list-row">
-        <label for="node-input-projectList"><i class="fa fa-sign-out"></i> <span>Target</span></label>
-        <select id="node-input-projectList" class="node-input-width">
+        <label><i class="fa fa-sign-out"></i> <span>Target</span></label>
+        <span class="project-link-group-option">
+            <input type="radio" id="radio-input-direct" name="broadcast" value="false" checked />
+            <label for="radio-input-direct">Send message to project</label>
+        </span>
+    </div>
+    <div class="form-row project-list-row">
+        <label><span>&nbsp</span></label>
+        <select id="node-input-projectList" class="node-input-width" disabled>
         </select>
+    </div>
+    <div class="form-row project-list-row">
+        <label><span>&nbsp</span></label>
+        <span class="project-link-group-option">
+            <input type="radio" id="radio-input-broadcast" name="broadcast" value="true" />
+            <label for="radio-input-broadcast">Broadcast message to all projects</label>
+        </span>
     </div>
     <div class="form-row link-topic-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
@@ -74,7 +113,7 @@
      * @returns `true` if it is a valid sub topic
      */
     function isValidSubscriptionTopic (subTopic) {
-        return /^(([^/$+#\b\f\n\r\t\v\0]+)(\/([^/$+#\b\f\n\r\t\v\0]+?))+)$/.test(subTopic)
+        return /^(?:(?:[^/$+#\b\f\n\r\t\v\0]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0]+?))*)$/.test(subTopic)
     }
 
     /**
@@ -85,25 +124,55 @@
      * @returns `true` if it is a valid sub topic
      */
     function isValidPublishTopic (subTopic) {
-        return /^(([^/$+#\b\f\n\r\t\v\0]+)(\/([^/$+#\b\f\n\r\t\v\0]+?))+)$/.test(subTopic)
+        return /^(?:(?:[^/$+#\b\f\n\r\t\v\0]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0]+?))*)$/.test(subTopic)
     }
 
     function onEditPrepare (node, targetType) {
+        let isBroadcast = node.broadcast === true
+        let isReturnMode = node.mode === 'return'
+
+        // Initialise UI state according to node state
         loadProjectList('#node-input-projectList', node.project, targetType || node.type)
         $('#node-input-name').val(node.name)
         $('#node-input-topic').val(node.topic)
         $('#node-input-timeout').val(node.timeout)
+        $('#node-input-mode').val(node.mode)
+        $('input:radio[name="broadcast"]').val([isBroadcast.toString()])
+
+        // watch for switch between broadcast and p2p
+        $('input:radio[name="broadcast"]').on('change', function (e) {
+            isBroadcast = e.target.value === 'true'
+            updateUI()
+        })
+
+        // watch for switch between out and return mode
         if (node.type === 'project link out') {
             $('#node-input-mode').on('change', function (e) {
-                if ($(this).val() === 'return') {
-                    $('.link-topic-row').hide()
-                    $('.project-list-row').hide()
-                } else {
-                    $('.link-topic-row').show()
-                    $('.project-list-row').show()
-                }
+                isReturnMode = e.target.value === 'return'
+                updateUI()
             })
-            $('#node-input-mode').trigger('change')
+        }
+
+        updateUI()
+
+        function updateUI () {
+            if (node.type === 'project link out' && isReturnMode) {
+                $('.link-topic-row').hide()
+                $('.project-list-row').hide()
+                $('#node-input-projectList').prop('disabled', true)
+            } else if (node.type === 'project link out') {
+                $('.link-topic-row').show()
+                $('.project-list-row').show()
+                $('#node-input-projectList').prop('disabled', isBroadcast ? true : null)
+            } else if (node.type === 'project link in') {
+                $('.link-topic-row').show()
+                $('.project-list-row').show()
+                $('#node-input-projectList').prop('disabled', isBroadcast ? null : true)
+            } else {
+                $('.link-topic-row').show()
+                $('.project-list-row').show()
+                $('#node-input-projectList').prop('disabled', null)
+            }
         }
     }
 
@@ -111,8 +180,15 @@
         node.project = $('#node-input-projectList').val()
         node.name = $('#node-input-name').val()
         node.topic = $('#node-input-topic').val()
+
         if (node.type === 'project link call') {
             node.timeout = $('#node-input-timeout').val()
+        }
+        if (node.type === 'project link out') {
+            node.mode = $('#node-input-mode').val()
+        }
+        if (node.type === 'project link in' || node.type === 'project link out') {
+            node.broadcast = $('input:radio[name="broadcast"]:checked').val() === 'true'
         }
     }
 
@@ -121,7 +197,7 @@
         if (!el || !el.length) {
             return
         }
-        el.attr('disabled', 'true')
+        el.prop('disabled', true)
         val = val || el.val()
         // if ajax call fails, we still want the original value set in the selector
         // so that if the user clicks Done (or the workspace) the same value is
@@ -142,18 +218,18 @@
                 el.empty()
                 // broadcast not permitted in link call at this time but has been
                 // considered in the code base - possible future iteration
-                if (nodeType !== 'project link call') {
-                    el.append(new Option('Broadcast', 'broadcast', false, val === 'broadcast'))
+                if (nodeType === 'project link in') {
+                    el.append(new Option('all projects', 'all', false, val === 'all'))
                 }
                 const projects = (data.count ? data.projects : null) || []
                 for (let index = 0; index < projects.length; index++) {
                     const item = projects[index]
                     el.append(new Option(item.name, item.id, false, item.id === val))
                 }
-                el.attr('disabled', null)
+                $('input:radio[name="broadcast"]:checked').trigger('change')
             })
             .fail(function (jqXHR, textStatus, errorThrown) {
-                el.attr('disabled', null)
+                $('input:radio[name="broadcast"]:checked').trigger('change')
                 console.error(jqXHR, textStatus, errorThrown)
             })
     }
@@ -171,6 +247,7 @@
         defaults: {
             name: { value: '_DEFAULT_' },
             project: { value: '', required: true },
+            broadcast: { value: false, required: true },
             topic: { value: '', required: true, validate: isValidSubscriptionTopic }
         },
         inputs: 0,
@@ -201,6 +278,7 @@
         defaults: {
             name: { value: '_DEFAULT_' },
             mode: { value: 'link' }, // link || return
+            broadcast: { value: false, required: true },
             project: { value: '', required: true },
             topic: {
                 value: '',

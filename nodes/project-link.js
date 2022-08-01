@@ -46,29 +46,27 @@ module.exports = function (RED) {
 
     /**
      * Opinionated test to check topic is valid for subscription...
-     * * Must not contain  `'space' + # $ \ \b\f\n\r\t\v`
-     * * Permits `+` character at index 4
+     * * Must not contain  `<space>` `+` `#` `$` `\` `\b` `\f` `\n` `\r` `\t` `\v`
+     * * Permits `+` character at index 4 (project name)
      * * Must have at least 1 character between slashes
      * * Must not start or end with a slash
      * @param {string} topic
      * @returns `true` if it is a valid sub topic
-     * @see https://regex101.com/r/nNSRko/1
      */
     function isValidSubscriptionTopic (topic) {
-        return /^(?:[^/$+#\b\f\n\r\t\v\0\s]+\/){4}(?:\+|[^/$+#\b\f\n\r\t\v\0\s]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0\s]+?))+$/.test(topic)
+        return /^(?:[^/$+#\b\f\n\r\t\v\0\s]+\/){4}(?:\+|[^/$+#\b\f\n\r\t\v\0\s]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0\s]+?)){2,}$/.test(topic)
     }
 
     /**
      * Opinionated test to check topic is valid for publishing...
-     * * Must not contain  `'space' + # $ \ \b\f\n\r\t\v`
+     * * Must not contain  `<space>` `+` `#` `$` `\` `\b` `\f` `\n` `\r` `\t` `\v`
      * * Must have at least 1 character between slashes
      * * Must not start or end with a slash
      * @param {string} topic
      * @returns `true` if it is a valid sub topic
-     * @see https://regex101.com/r/cDapr4/1
      */
     function isValidPublishTopic (topic) {
-        return /^(?:[^/$+#\b\f\n\r\t\v\0]+\/){4}(?:[^/$+#\b\f\n\r\t\v\0]+)(?:\/([^/$+#\b\f\n\r\t\v\0]+?))+$/.test(topic)
+        return /^(?:[^/$+#\b\f\n\r\t\v\0]+\/){4}(?:[^/$+#\b\f\n\r\t\v\0]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0]+?)){2,}$/.test(topic)
     }
 
     function jsonReplacer (_key, value) {
@@ -89,7 +87,7 @@ module.exports = function (RED) {
                 return wrapper('Set', [...value])
             } else if (Buffer.isBuffer(value) || (value.constructor.name === 'Buffer')) {
                 return value.toJSON()
-            } 
+            }
         }
         return value
     }
@@ -108,6 +106,7 @@ module.exports = function (RED) {
             } else if (value.type === 'Set') {
                 return new Set(value.data)
             } else if (value.type === 'function') {
+                // eslint-disable-next-line no-new-func
                 return new Function('return ' + value.data)()
             }
         }
@@ -139,12 +138,15 @@ module.exports = function (RED) {
         return result
     }
 
-    function buildLinkTopic (node, project, subTopic, isCallResponse) {
+    function buildLinkTopic (node, project, subTopic, broadcast, isCallResponse) {
         const topicParts = [TOPIC_HEADER, TOPIC_VERSION, RED.settings.flowforge.teamID]
         if (node.type === 'project link in') {
             topicParts.push('p')
-            if (project === 'broadcast') {
+            if (project === 'all') {
                 topicParts.push('+')
+                topicParts.push('out')
+            } else if (broadcast) {
+                topicParts.push(project)
                 topicParts.push('out')
             } else {
                 topicParts.push(project)
@@ -152,7 +154,7 @@ module.exports = function (RED) {
             }
         } else if (node.type === 'project link out') {
             topicParts.push('p')
-            if (project === 'broadcast') {
+            if (broadcast) {
                 topicParts.push(RED.settings.flowforge.projectID)
                 topicParts.push('out')
             } else {
@@ -200,17 +202,25 @@ module.exports = function (RED) {
          * @param {MQTT.IPublishPacket} packet
          */
         function onMessage (topic, message, packet) {
-            const callbacks = topicCallbackMap.get(topic)
-            let broadcastTopic
+            const subID = packet.properties?.subscriptionIdentifier
+            let lookupTopic = topic
+            if (subID === 1) {
+                lookupTopic = '1:' + topic
+            }
+            const directCallbacks = topicCallbackMap.get(lookupTopic) // ff/v1/team-id/p/project-id/in/sub-topic
+
             let broadcastCallbacks
-            const topicParts = (topic || '').split('/')
-            if (topicParts[5] === 'out') {
-                topicParts[4] = '+'
-                broadcastTopic = topicParts.join('/')
-                broadcastCallbacks = topicCallbackMap.get(broadcastTopic)
+            let broadcastLookupTopic
+            if (subID === 2) {
+                const topicParts = (topic || '').split('/')
+                if (topicParts[5] === 'out') {
+                    topicParts[4] = '+' // ff/v1/team-id/p/+/out/sub-topic all projects
+                    broadcastLookupTopic = topicParts.join('/')
+                    broadcastCallbacks = topicCallbackMap.get('2:' + broadcastLookupTopic)
+                }
             }
 
-            if ((!callbacks || !callbacks.size) && (!broadcastCallbacks || !broadcastCallbacks.size)) {
+            if ((!directCallbacks || !directCallbacks.size) && (!broadcastCallbacks || !broadcastCallbacks.size)) {
                 return // no callbacks registered for this topic
             }
 
@@ -223,7 +233,7 @@ module.exports = function (RED) {
             }
 
             // call listeners
-            callbacks && callbacks.forEach(cb => {
+            directCallbacks && directCallbacks.forEach(cb => {
                 cb && cb(err, topic, msg, packet)
             })
             broadcastCallbacks && broadcastCallbacks.forEach(cb => {
@@ -350,11 +360,19 @@ module.exports = function (RED) {
                 if (!isValidSubscriptionTopic(topic)) {
                     return Promise.reject(new Error('Invalid topic'))
                 }
+
+                // generate a lookup based on the subscriptionId + : + topic
+                let lookupTopic = topic
+                const subID = [null, 1, 2][node.subscriptionIdentifier]
+                if (subID) {
+                    lookupTopic = subID + ':' + topic
+                }
+
                 /** @type {Set} */
-                let callbacks = topicCallbackMap.get(topic)
+                let callbacks = topicCallbackMap.get(lookupTopic)
                 const topicExists = !!callbacks
                 callbacks = callbacks || new Set()
-                topicCallbackMap.set(topic, callbacks)
+                topicCallbackMap.set(lookupTopic, callbacks)
                 callbacks.add(callback)
                 if (topicExists) {
                     return Promise.resolve()
@@ -367,15 +385,17 @@ module.exports = function (RED) {
                 subOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID
                 subOptions.properties.userProperties._nodeID = node.id
                 subOptions.properties.userProperties._ts = Date.now()
+                if (subID) {
+                    subOptions.properties.subscriptionIdentifier = subID
+                }
                 const subscribePromise = function (topic, subOptions) {
                     return new Promise((resolve, reject) => {
                         if (!client) {
                             return reject(new Error('client not initialised')) // if the client is not initialised, cannot subscribe!
                         }
                         try {
-                            client.subscribe(topic, subOptions, (err, granted) => {
-                                if (err) { reject(err) } else { resolve(granted) }
-                            })
+                            client.subscribe(topic, subOptions)
+                            resolve(true)
                         } catch (error) {
                             reject(error)
                         }
@@ -383,9 +403,15 @@ module.exports = function (RED) {
                 }
                 return subscribePromise(topic, subOptions)
             },
-            unsubscribe (_node, topic, callback) {
+            unsubscribe (node, topic, callback) {
+                // generate a lookup based on the subscriptionId + : + topic
+                let lookupTopic = topic
+                const subID = [null, 1, 2][node.subscriptionIdentifier]
+                if (subID) {
+                    lookupTopic = subID + ':' + topic
+                }
                 /** @type {Set} */
-                const callbacks = topicCallbackMap.get(topic)
+                const callbacks = topicCallbackMap.get(lookupTopic)
                 if (!callbacks) {
                     return Promise.resolve()
                 }
@@ -395,7 +421,7 @@ module.exports = function (RED) {
                     callbacks.clear() // delete all
                 }
                 if (callbacks.size === 0) {
-                    topicCallbackMap.delete(topic)
+                    topicCallbackMap.delete(lookupTopic)
                 } else {
                     return Promise.resolve() // callbacks still exist, don't unsubscribe
                 }
@@ -405,9 +431,8 @@ module.exports = function (RED) {
                             return resolve() // if the client is not initialised, there are no subscriptions!
                         }
                         try {
-                            client.unsubscribe(topic, (err) => {
-                                if (err) { reject(err) } else { resolve() }
-                            })
+                            client.unsubscribe(topic)
+                            resolve()
                         } catch (error) {
                             reject(error)
                         }
@@ -547,6 +572,10 @@ module.exports = function (RED) {
                 }
             },
             close (done) {
+                topicCallbackMap.forEach(callbacks => {
+                    callbacks.clear()
+                })
+                topicCallbackMap.clear()
                 allNodes.forEach(n => {
                     allNodes.delete(n)
                 })
@@ -571,7 +600,7 @@ module.exports = function (RED) {
             get hasSubscriptions () {
                 if (topicCallbackMap.size) {
                     for (const set of topicCallbackMap) {
-                        if (set.size) {
+                        if (set.length) {
                             return true
                         }
                     }
@@ -585,9 +614,11 @@ module.exports = function (RED) {
     function ProjectLinkInNode (n) {
         RED.nodes.createNode(this, n)
         const node = this
-        const project = n.project
-        const subTopic = n.topic
-        const topic = buildLinkTopic(node, project, subTopic)
+        node.project = n.project
+        node.subscriptionIdentifier = n.project === 'all' ? 2 : 1
+        node.subTopic = n.topic
+        node.broadcast = n.broadcast === true || n.broadcast === 'true'
+        node.topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, false)
         mqtt.connect()
         mqtt.registerStatus(node)
 
@@ -595,8 +626,8 @@ module.exports = function (RED) {
         const onSub = function (err, topic, msg, _packet) {
             const t = parseLinkTopic(topic)
             // ensure topic matches
-            if (subTopic !== t.subTopic) {
-                node.warn(`Expected topic ${subTopic}, received ${t.subTopic}`)
+            if (node.subTopic !== t.subTopic) {
+                node.warn(`Expected topic ${node.subTopic}, received ${t.subTopic}`)
                 return
             }
             // check for error in processing the payload+packet → msg
@@ -606,8 +637,13 @@ module.exports = function (RED) {
             }
             node.receive(msg)
         }
+        // to my inbox
+        // * this project in        ff/v1/7N152GxG2p/p/ca65f5ed-aea0-4a10-ac9a-2086b6af6700/in/b1/b1
+        // broadcasts
+        // * specific project out   ff/v1/7N152GxG2p/p/ca65f5ed-aea0-4a10-ac9a-2086b6af6700/out/b1/b1    sub broadcast
+        // * +any project+ out      ff/v1/7N152GxG2p/p/+/out/b1/b1    sub broadcast
 
-        mqtt.subscribe(node, topic, { qos: 2 }, onSub)
+        mqtt.subscribe(node, node.topic, { qos: 2 }, onSub)
             .then(_result => {})
             .catch(err => {
                 node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
@@ -629,7 +665,7 @@ module.exports = function (RED) {
             done()
         })
         node.on('close', function (done) {
-            mqtt.unsubscribe(node, topic)
+            mqtt.unsubscribe(node, node.topic, onSub)
                 .then(() => {})
                 .catch(_err => {})
                 .finally(() => {
@@ -648,19 +684,20 @@ module.exports = function (RED) {
     function ProjectLinkOutNode (n) {
         RED.nodes.createNode(this, n)
         const node = this
-        const project = n.project
-        const subTopic = n.topic
-        const mode = n.mode || 'link'
+        node.project = n.project
+        node.subTopic = n.topic
+        node.mode = n.mode || 'link'
+        node.broadcast = n.broadcast === true || n.broadcast === 'true'
         mqtt.connect()
         mqtt.registerStatus(node)
         node.on('input', async function (msg, _send, done) {
             try {
-                if (mode === 'return') {
+                if (node.mode === 'return') {
                     if (Array.isArray(msg._proLinkRoute) && msg._proLinkRoute.length > 0) {
                         /** @type {MessageEvent} */
                         const messageEvent = msg._proLinkRoute.pop()
                         if (messageEvent && messageEvent.project && messageEvent.path && messageEvent.eventId) {
-                            const responseTopic = buildLinkTopic(messageEvent.node, messageEvent.project, messageEvent.path, true)
+                            const responseTopic = buildLinkTopic(messageEvent.node, messageEvent.project, messageEvent.path, node.broadcast, true)
                             const properties = {
                                 correlationData: messageEvent.eventId
                             }
@@ -672,8 +709,8 @@ module.exports = function (RED) {
                         node.warn('Project Link Source missing')
                     }
                     done()
-                } else if (mode === 'link') {
-                    const topic = buildLinkTopic(node, project, subTopic)
+                } else if (node.mode === 'link') {
+                    const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, false, false)
                     await mqtt.publish(node, topic, msg)
                     done()
                 }
@@ -699,10 +736,10 @@ module.exports = function (RED) {
     function ProjectLinkCallNode (n) {
         RED.nodes.createNode(this, n)
         const node = this
-        const project = n.project
-        const subTopic = n.topic
-        const topic = buildLinkTopic(node, project, subTopic)
-        const responseTopic = buildLinkTopic(node, project, subTopic, true)
+        node.project = n.project
+        node.subTopic = n.topic
+        node.topic = buildLinkTopic(node, node.project, node.subTopic, false, false)
+        node.responseTopic = buildLinkTopic(node, node.project, node.subTopic, false, true)
         let timeout = parseFloat(n.timeout || '30') * 1000
         if (isNaN(timeout)) {
             timeout = 30000
@@ -711,7 +748,7 @@ module.exports = function (RED) {
         function onSub (err, topic, msg, packet) {
             const t = parseLinkTopic(topic)
             // ensure topic matches
-            if (subTopic !== t.subTopic) {
+            if (node.subTopic !== t.subTopic) {
                 return
             }
             // check for error in processing the payload+packet → msg
@@ -727,7 +764,7 @@ module.exports = function (RED) {
 
         mqtt.connect()
         mqtt.registerStatus(node)
-        mqtt.subscribe(node, responseTopic, { qos: 2 }, onSub)
+        mqtt.subscribe(node, node.responseTopic, { qos: 2 }, onSub)
             .then(_result => {})
             .catch(err => {
                 node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
@@ -745,16 +782,16 @@ module.exports = function (RED) {
                         id: node.id,
                         type: node.type
                     },
-                    project: project,
-                    path: subTopic,
+                    project: node.project,
+                    path: node.subTopic,
                     ts: Date.now()
                 }
                 /** @type {MessageEvents} */
                 messageEvents[eventId] = {
                     ...messageEvent,
                     msg: RED.util.cloneMessage(msg),
-                    topic: topic,
-                    responseTopic: responseTopic,
+                    topic: node.topic,
+                    responseTopic: node.responseTopic,
                     send,
                     done,
                     receivers: {}, // A lookup of ProjectLinkIn nodes for tracking all msgs generated by matching project-link-in
@@ -770,14 +807,14 @@ module.exports = function (RED) {
                         correlationData: eventId
                     }
                 }
-                await mqtt.publish(node, topic, msg, options)
+                await mqtt.publish(node, node.topic, msg, options)
             } catch (error) {
                 done(error)
             }
         })
 
         node.on('close', function (done) {
-            mqtt.unsubscribe(node, responseTopic)
+            mqtt.unsubscribe(node, node.responseTopic)
                 .then(() => {})
                 .catch(_err => {})
                 .finally(() => {
