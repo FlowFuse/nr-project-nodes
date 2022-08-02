@@ -252,11 +252,12 @@
         },
         inputs: 0,
         outputs: 1,
-        icon: 'link-out.svg',
+        icon: 'ff-logo.svg',
+        paletteLabel:'project in',
         outputLabels: function (i) {
             return this.name || 'link in'
         },
-        showLabel: false,
+        // showLabel: false,
         label: function () {
             return this.name || this.topic || 'link in'
         },
@@ -295,15 +296,16 @@
         outputs: 0,
         icon: function () {
             if (this.mode === 'return') {
-                return 'link-return.svg'
+                return 'ff-logo.svg'
             } else {
-                return 'link-out.svg'
+                return 'ff-logo.svg'
             }
         },
+        paletteLabel:'project out',
         inputLabels: function (i) {
             return this.name || (this.mode === 'return' ? 'link return' : 'link out')
         },
-        showLabel: false,
+        // showLabel: false,
         label: function () {
             return this.name || (this.mode === 'return' ? 'link return' : this.topic) || 'link out'
         },
@@ -340,7 +342,8 @@
         },
         inputs: 1,
         outputs: 1,
-        icon: 'link-call.svg',
+        icon: 'ff-logo.svg',
+        paletteLabel:'project call',
         inputLabels: function (i) {
             return this.name || 'link call'
         },
