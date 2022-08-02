@@ -76,7 +76,7 @@
             <label for="ff-project-link-radio-input-broadcast">Broadcast message to all projects</label>
         </span>
     </div>
-    <div class="form-row link-topic-row">
+    <div class="form-row ff-project-link-topic-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
         <input type="text" id="node-input-topic" class="ff-project-link-input-width">
     </div>
@@ -157,19 +157,19 @@
 
         function updateUI () {
             if (node.type === 'project link out' && isReturnMode) {
-                $('.link-topic-row').hide()
+                $('.ff-project-link-topic-row').hide()
                 $('.ff-project-link-list-row').hide()
                 $('#node-input-projectList').prop('disabled', true)
             } else if (node.type === 'project link out') {
-                $('.link-topic-row').show()
+                $('.ff-project-link-topic-row').show()
                 $('.ff-project-link-list-row').show()
                 $('#node-input-projectList').prop('disabled', isBroadcast ? true : null)
             } else if (node.type === 'project link in') {
-                $('.link-topic-row').show()
+                $('.ff-project-link-topic-row').show()
                 $('.ff-project-link-list-row').show()
                 $('#node-input-projectList').prop('disabled', isBroadcast ? null : true)
             } else {
-                $('.link-topic-row').show()
+                $('.ff-project-link-topic-row').show()
                 $('.ff-project-link-list-row').show()
                 $('#node-input-projectList').prop('disabled', null)
             }
