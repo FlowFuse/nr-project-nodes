@@ -369,7 +369,7 @@
     <p>This node can either listen for messages broadcast by other projects,
         or listen for messages sent directly to this project.</p>
     <p>The node is configured with a <code>topic</code> to listen on. This works
-       like an MQTT topic - allowing projects to send messages targetting different
+       like an MQTT topic - allowing projects to send messages targeting different
        subscribers.</p>
     <p>The node does not support MQTT wildcard characters - a fully qualified topic
        must be used.</p>
@@ -383,7 +383,10 @@
         <dd>
             This property contains information about the source of the message.
             <ul>
+                <li><code>projectId</code> - the id of the project that sent the message</li>
                 <li><code>topic</code> - the topic the message was received on</li>
+                <li><code>callStack</code> - when using the Project Call node, this contains
+                 information about the call stack. This property must not be modified.</li>
             </ul>
         </dd>
     </dl>
@@ -404,8 +407,15 @@
     <p>
         When configured to send or broadcast messages to other projects, the node
         is configured with a <code>topic</code> to send on. This works
-        like an MQTT topic - allowing projects to send messages targetting different
+        like an MQTT topic - allowing projects to send messages targeting different
         subscribers.
+    </p>
+    <p>
+        When configured to return the message to the previous Project Call node,
+        the node requires the property <code>msg.projectLink.callStack</code> to
+        be present. This property is set by the Project In node when it receives
+        messages from a Project Call node. If this property is not present, the
+        node will be unable to respond properly.
     </p>
     <h3>Input</h3>
     <dl class="message-properties">
@@ -434,7 +444,7 @@
     </p>
     <p>
         The node is configured with a <code>topic</code> to send on. This works
-        like an MQTT topic - allowing projects to send messages targetting different
+        like an MQTT topic - allowing projects to send messages targeting different
         subscribers.
     </p>
     <h3>Output</h3>
@@ -447,8 +457,11 @@
         <dd>
             This property contains information about the source of the message.
             <ul>
+                <li><code>projectId</code> - the id of the project that sent the message</li>
                 <li><code>topic</code> - the topic the message was received on</li>
-            </ul>
+                <li><code>callStack</code> - when using the Project Call node, this contains
+                    information about the call stack. This property must not be modified.</li>
+               </ul>
         </dd>
     </dl>
 </script>
