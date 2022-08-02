@@ -142,7 +142,7 @@ module.exports = function (RED) {
         const topicParts = [TOPIC_HEADER, TOPIC_VERSION, RED.settings.flowforge.teamID]
         if (node.type === 'project link in') {
             topicParts.push('p')
-            if (project === 'all') {
+            if (broadcast && project === 'all') {
                 topicParts.push('+')
                 topicParts.push('out')
             } else if (broadcast) {
@@ -394,6 +394,7 @@ module.exports = function (RED) {
                             return reject(new Error('client not initialised')) // if the client is not initialised, cannot subscribe!
                         }
                         try {
+                            console.log(`SUB ${topic}`)
                             client.subscribe(topic, subOptions)
                             resolve(true)
                         } catch (error) {
@@ -711,6 +712,7 @@ module.exports = function (RED) {
                     done()
                 } else if (node.mode === 'link') {
                     const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, false, false)
+                    console.log(`PUB ${topic}`)
                     await mqtt.publish(node, topic, msg)
                     done()
                 }
