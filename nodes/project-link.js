@@ -497,7 +497,12 @@ module.exports = function (RED) {
                     options = Object.assign({}, defaultOptions, options)
 
                     if (RED.settings.flowforge.projectLink.broker.clientId) {
-                        options.clientId = RED.settings.flowforge.projectLink.broker.clientId + ':n'
+                        options.clientId = RED.settings.flowforge.projectLink.broker.clientId
+                    } else {
+                        // If no clientId specified, use 'username' with ':n' appended.
+                        // This ensures uniqueness between this and the launcher/device's own
+                        // client connection.
+                        options.clientId = RED.settings.flowforge.projectLink.broker.username + ':n'
                     }
                     if (RED.settings.flowforge.projectLink.broker.username) {
                         options.username = RED.settings.flowforge.projectLink.broker.username
@@ -616,7 +621,7 @@ module.exports = function (RED) {
         RED.nodes.createNode(this, n)
         const node = this
         node.project = n.project
-        node.subscriptionIdentifier = n.project === 'all' ? 2 : 1
+        node.subscriptionIdentifier = (n.broadcast && n.project === 'all') ? 2 : 1
         node.subTopic = n.topic
         node.broadcast = n.broadcast === true || n.broadcast === 'true'
         node.topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, false)
