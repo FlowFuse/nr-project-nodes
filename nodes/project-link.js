@@ -616,7 +616,7 @@ module.exports = function (RED) {
         RED.nodes.createNode(this, n)
         const node = this
         node.project = n.project
-        node.subscriptionIdentifier = n.project === 'all' ? 2 : 1
+        node.subscriptionIdentifier = (n.broadcast && n.project === 'all') ? 2 : 1
         node.subTopic = n.topic
         node.broadcast = n.broadcast === true || n.broadcast === 'true'
         node.topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, false)
