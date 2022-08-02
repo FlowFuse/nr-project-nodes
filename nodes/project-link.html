@@ -1,0 +1,457 @@
+<style>
+    #dialog-form > div.form-row > .node-input-width {
+        width: calc(100% - 125px);
+    }
+    #dialog-form > div.form-row > span.project-link-group-option > input {
+        width: auto;
+        display: inline-block;
+        vertical-align: middle;
+        margin: 0px 2px 2px 0px;
+    }
+    #dialog-form > div.form-row > span.project-link-group-option > label {
+        width: 250px;
+        display: inline-block;
+    }
+</style>
+
+<script type="text/html" data-template-name="project link in">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name">Name</span></label>
+        <input type="text" id="node-input-name" class="node-input-width">
+    </div>
+    <div class="form-row project-list-row">
+        <label><i class="fa fa-sign-in"></i> <span>Source</span></label>
+        <span class="project-link-group-option">
+            <input type="radio" id="radio-input-direct" name="broadcast" value="false" checked />
+            <label for="radio-input-direct">Receive messages sent to this project</label>
+        </span>
+    </div>
+    <div class="form-row project-list-row">
+        <label><span>&nbsp</span></label>
+        <span class="project-link-group-option">
+            <input type="radio" id="radio-input-broadcast" name="broadcast" value="true" />
+            <label for="radio-input-broadcast">Listen for broadcast messages from</label>
+        </span>
+    </div>
+    <div class="form-row project-list-row">
+        <label><span>&nbsp</span></label>
+        <select id="node-input-projectList" class="node-input-width" disabled>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
+        <input type="text" id="node-input-topic" class="node-input-width">
+    </div>
+</script>
+
+<script type="text/html" data-template-name="project link out">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name">Name</span></label>
+        <input type="text" id="node-input-name" class="node-input-width">
+    </div>
+    <div class="form-row">
+        <label for="node-input-mode"><i class="fa fa-cog"></i> <span>Mode</span></label>
+        <select id="node-input-mode" class="node-input-width">
+            <option value="link" selected>Send to specified project node</option>
+            <option value="return">Return to project link call</option>
+        </select>
+    </div>
+
+    <div class="form-row project-list-row">
+        <label><i class="fa fa-sign-out"></i> <span>Target</span></label>
+        <span class="project-link-group-option">
+            <input type="radio" id="radio-input-direct" name="broadcast" value="false" checked />
+            <label for="radio-input-direct">Send message to project</label>
+        </span>
+    </div>
+    <div class="form-row project-list-row">
+        <label><span>&nbsp</span></label>
+        <select id="node-input-projectList" class="node-input-width" disabled>
+        </select>
+    </div>
+    <div class="form-row project-list-row">
+        <label><span>&nbsp</span></label>
+        <span class="project-link-group-option">
+            <input type="radio" id="radio-input-broadcast" name="broadcast" value="true" />
+            <label for="radio-input-broadcast">Broadcast message to all projects</label>
+        </span>
+    </div>
+    <div class="form-row link-topic-row">
+        <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
+        <input type="text" id="node-input-topic" class="node-input-width">
+    </div>
+</script>
+<script type="text/html" data-template-name="project link call">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name">Name</span></label>
+        <input type="text" id="node-input-name" class="node-input-width">
+    </div>
+    <div class="form-row">
+        <label for="node-input-timeout"><i class="fa fa-clock-o"></i> <span data-i18n="exec.label.timeout"></span>Timeout</label>
+        <input type="text" id="node-input-timeout" placeholder="30" style="width: 80px; margin-right: 5px;">
+        <span data-i18n="inject.seconds">sec</span>
+    </div>
+    <div class="form-row">
+        <label for="node-input-projectList"><i class="fa fa-sign-out"></i> <span>Target</span></label>
+        <select id="node-input-projectList" class="node-input-width">
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
+        <input type="text" id="node-input-topic" class="node-input-width">
+    </div>
+</script>
+
+<script type="text/javascript">
+/* global RED */
+(function () {
+    /**
+     * Test a topic string is valid for subscription...
+     * * Must not contain the following characters: + # $ \
+     * * Must not start with a slash
+     * @param {string} subTopic
+     * @returns `true` if it is a valid sub topic
+     */
+    function isValidSubscriptionTopic (subTopic) {
+        return /^(?:(?:[^/$+#\b\f\n\r\t\v\0]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0]+?))*)$/.test(subTopic)
+    }
+
+    /**
+     * Test a topic string is valid for publishing...
+     * * Must not contain the following characters: + # $ \
+     * * Must not start with a slash
+     * @param {string} subTopic
+     * @returns `true` if it is a valid sub topic
+     */
+    function isValidPublishTopic (subTopic) {
+        return /^(?:(?:[^/$+#\b\f\n\r\t\v\0]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0]+?))*)$/.test(subTopic)
+    }
+
+    function onEditPrepare (node, targetType) {
+        let isBroadcast = node.broadcast === true
+        let isReturnMode = node.mode === 'return'
+
+        // Initialise UI state according to node state
+        loadProjectList('#node-input-projectList', node.project, targetType || node.type)
+        $('#node-input-name').val(node.name)
+        $('#node-input-topic').val(node.topic)
+        $('#node-input-timeout').val(node.timeout)
+        $('#node-input-mode').val(node.mode)
+        $('input:radio[name="broadcast"]').val([isBroadcast.toString()])
+
+        // watch for switch between broadcast and p2p
+        $('input:radio[name="broadcast"]').on('change', function (e) {
+            isBroadcast = e.target.value === 'true'
+            updateUI()
+        })
+
+        // watch for switch between out and return mode
+        if (node.type === 'project link out') {
+            $('#node-input-mode').on('change', function (e) {
+                isReturnMode = e.target.value === 'return'
+                updateUI()
+            })
+        }
+
+        updateUI()
+
+        function updateUI () {
+            if (node.type === 'project link out' && isReturnMode) {
+                $('.link-topic-row').hide()
+                $('.project-list-row').hide()
+                $('#node-input-projectList').prop('disabled', true)
+            } else if (node.type === 'project link out') {
+                $('.link-topic-row').show()
+                $('.project-list-row').show()
+                $('#node-input-projectList').prop('disabled', isBroadcast ? true : null)
+            } else if (node.type === 'project link in') {
+                $('.link-topic-row').show()
+                $('.project-list-row').show()
+                $('#node-input-projectList').prop('disabled', isBroadcast ? null : true)
+            } else {
+                $('.link-topic-row').show()
+                $('.project-list-row').show()
+                $('#node-input-projectList').prop('disabled', null)
+            }
+        }
+    }
+
+    function onEditSave (node) {
+        node.project = $('#node-input-projectList').val()
+        node.name = $('#node-input-name').val()
+        node.topic = $('#node-input-topic').val()
+
+        if (node.type === 'project link call') {
+            node.timeout = $('#node-input-timeout').val()
+        }
+        if (node.type === 'project link out') {
+            node.mode = $('#node-input-mode').val()
+        }
+        if (node.type === 'project link in' || node.type === 'project link out') {
+            node.broadcast = $('input:radio[name="broadcast"]:checked').val() === 'true'
+        }
+    }
+
+    function loadProjectList (selector, val, nodeType) {
+        const el = $(selector)
+        if (!el || !el.length) {
+            return
+        }
+        el.prop('disabled', true)
+        val = val || el.val()
+        // if ajax call fails, we still want the original value set in the selector
+        // so that if the user clicks Done (or the workspace) the same value is
+        // re-entered preventing loss or change of original value
+        if (val) {
+            /** @type {HTMLOptionsCollection} */ const options = el[0].options
+            if (!options || !options.length || options.selectedIndex < 0 || options.item(options.selectedIndex).value !== val) {
+                options.selectedIndex = -1
+                el.append(new Option(val, val, false, true))
+            }
+        }
+        $.ajax({
+            url: 'nr-project-link/projects',
+            type: 'GET',
+            datatype: 'json'
+        })
+            .done(function (data) {
+                el.empty()
+                // broadcast not permitted in link call at this time but has been
+                // considered in the code base - possible future iteration
+                if (nodeType === 'project link in') {
+                    el.append(new Option('all projects', 'all', false, val === 'all'))
+                }
+                const projects = (data.count ? data.projects : null) || []
+                for (let index = 0; index < projects.length; index++) {
+                    const item = projects[index]
+                    el.append(new Option(item.name, item.id, false, item.id === val))
+                }
+                $('input:radio[name="broadcast"]:checked').trigger('change')
+            })
+            .fail(function (jqXHR, textStatus, errorThrown) {
+                $('input:radio[name="broadcast"]:checked').trigger('change')
+                console.error(jqXHR, textStatus, errorThrown)
+            })
+    }
+
+    function onAdd () {
+        if (this.name === '_DEFAULT_') {
+            this.name = ''
+            RED.actions.invoke('core:generate-node-names', this, { generateHistory: false })
+        }
+    }
+
+    RED.nodes.registerType('project link in', {
+        category: 'common',
+        color: '#87D8CF',
+        defaults: {
+            name: { value: '_DEFAULT_' },
+            project: { value: '', required: true },
+            broadcast: { value: false, required: true },
+            topic: { value: '', required: true, validate: isValidSubscriptionTopic }
+        },
+        inputs: 0,
+        outputs: 1,
+        icon: 'ff-logo.svg',
+        paletteLabel:'project in',
+        outputLabels: function (i) {
+            return this.name || 'link in'
+        },
+        // showLabel: false,
+        label: function () {
+            return this.name || this.topic || 'link in'
+        },
+        labelStyle: function () {
+            return this.name ? 'node_label_italic' : ''
+        },
+        oneditprepare: function () {
+            onEditPrepare(this, 'project link in')
+        },
+        oneditsave: function () {
+            onEditSave(this)
+        },
+        onadd: onAdd
+    })
+
+    RED.nodes.registerType('project link out', {
+        category: 'common',
+        color: '#87D8CF',
+        defaults: {
+            name: { value: '_DEFAULT_' },
+            mode: { value: 'link' }, // link || return
+            broadcast: { value: false, required: true },
+            project: { value: '', required: true },
+            topic: {
+                value: '',
+                validate: function (v) {
+                    if (this.mode === 'return') {
+                        return true
+                    }
+                    return v && isValidPublishTopic(v)
+                }
+            }
+        },
+        align: 'right',
+        inputs: 1,
+        outputs: 0,
+        icon: function () {
+            if (this.mode === 'return') {
+                return 'ff-logo.svg'
+            } else {
+                return 'ff-logo.svg'
+            }
+        },
+        paletteLabel:'project out',
+        inputLabels: function (i) {
+            return this.name || (this.mode === 'return' ? 'link return' : 'link out')
+        },
+        // showLabel: false,
+        label: function () {
+            return this.name || (this.mode === 'return' ? 'link return' : this.topic) || 'link out'
+        },
+        labelStyle: function () {
+            return this.name ? 'node_label_italic' : ''
+        },
+        oneditprepare: function () {
+            onEditPrepare(this, 'project link out')
+            $('#node-input-mode').on('change', function () {
+                $('.node-input-link-rows').toggle(this.value === 'link')
+            })
+            if (!this.mode) {
+                $('#node-input-mode').val('link').trigger('change')
+            }
+        },
+        oneditsave: function () {
+            onEditSave(this)
+        },
+        onadd: onAdd
+    })
+
+    RED.nodes.registerType('project link call', {
+        category: 'common',
+        color: '#87D8CF',
+        defaults: {
+            name: { value: '' },
+            project: { value: '', required: true },
+            topic: { value: '', required: true, validate: isValidPublishTopic },
+            timeout: {
+                value: '30',
+                label: RED._('node-red:link.timeout'),
+                validate: RED.validators.number(true)
+            }
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: 'ff-logo.svg',
+        paletteLabel:'project call',
+        inputLabels: function (i) {
+            return this.name || 'link call'
+        },
+        label: function () {
+            return this.name || this.topic || 'link call'
+        },
+        labelStyle: function () {
+            return this.name ? 'node_label_italic' : ''
+        },
+        oneditprepare: function () {
+            onEditPrepare(this, 'project link call')
+        },
+        oneditsave: function () {
+            onEditSave(this)
+        }
+    })
+})()
+</script>
+
+<script type="text/html" data-help-name="project link in">
+    <p>Receive messages from other projects</p>
+    <h3>Properties</h3>
+    <dl class="message-properties">
+        <dt><i>source</i></dt>
+        <dd>
+            The project to watch for messages
+        </dd>
+        <dt><i>path</i> <span class="property-type">string</span></dt>
+        <dd>
+            A free form, slash separated path that identifies this link. 
+            Example: a path of 'sensor/temperature' would receive message sent from a 
+            Project Link Out or Project Link Call with the same <code>target</code> 
+            and <code>path</code>.
+        </dd>
+    </dl>
+    <h3>Output</h3>
+    <dl class="message-properties">
+        <dt><i>msg</i> <span class="property-type">object</span></dt>
+        <dd>
+            The <code>msg</code> object sent from a Project Link Out or Project Link 
+            Call with the same <code>target</code> and <code>path</code>
+        </dd>
+    </dl>
+</script>
+
+<script type="text/html" data-help-name="project link out">
+    <p>Send messages to other projects</p>
+    <h3>Properties</h3>
+    <dl class="message-properties">
+        <dt><i>mode</i></dt>
+        <dd>
+            The operational mode of this node can be set to either send messages to a 
+            specific <code>project</code> and <code>path</code> or return a message that 
+            originated from a Project Link Call node
+        </dd>
+        <dt><i>target</i></dt>
+        <dd>
+            The project to send messages to
+        </dd>
+        <dt><i>path</i> <span class="property-type">string</span></dt>
+        <dd>
+            A free form, slash separated path that identifies this link. 
+            Example: a path of <code>sensor/temperature</code> would send messages to 
+            the <code>target</code> project where a link node has a matching path
+        </dd>
+    </dl>
+    <h3>Input</h3>
+    <dl class="message-properties">
+        <dt><i>msg</i> <span class="property-type">object</span></dt>
+        <dd>
+            The message to send to the <code>target</code> project <code>path</code>
+        </dd>
+    </dl>
+</script>
+
+<script type="text/html" data-help-name="project link call">
+    <p>Send messages to other projects and get a response</p>
+    <h3>Properties</h3>
+    <dl class="message-properties">
+        <dt><i>timeout</i><span class="property-type">number</span></dt>
+        <dd>
+            The number of seconds to wait for the sent <code>msg</code> to be returned
+            before raising a <code>timeout</code> error
+        </dd>
+        <dt><i>target</i></dt>
+        <dd>
+            The project to send messages to
+        </dd>
+        <dt><i>path</i> <span class="property-type">string</span></dt>
+        <dd>
+            A free form, slash separated path that identifies this link. 
+            Example: a path of <code>sensor/temperature</code> would send messages to 
+            the <code>target</code> project where a link node has a matching path
+        </dd>
+    </dl>
+    <h3>Input</h3>
+    <dl class="message-properties">
+        <dt><i>msg</i> <span class="property-type">object</span></dt>
+        <dd>
+            The message to send to the <code>target</code> project <code>path</code>
+        </dd>
+    </dl>
+    <h3>Output</h3>
+    <dl class="message-properties">
+        <dt><i>msg</i> <span class="property-type">object</span></dt>
+        <dd>
+            The <code>msg</code> object sent from a Project Link Out node set to
+            <code>return</code> mode
+        </dd>
+    </dl>
+</script>
