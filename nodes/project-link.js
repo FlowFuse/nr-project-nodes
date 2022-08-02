@@ -148,8 +148,8 @@ module.exports = function (RED) {
             } else if (broadcast) {
                 topicParts.push(project)
                 topicParts.push('out')
-            } else {
-                topicParts.push(project)
+            } else { // self
+                topicParts.push(RED.settings.flowforge.projectID)
                 topicParts.push('in')
             }
         } else if (node.type === 'project link out') {
