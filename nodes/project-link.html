@@ -1,14 +1,14 @@
 <style>
-    #dialog-form > div.form-row > .node-input-width {
+    #dialog-form > div.form-row > .ff-project-link-input-width {
         width: calc(100% - 125px);
     }
-    #dialog-form > div.form-row > span.project-link-group-option > input {
+    #dialog-form > div.form-row > span.ff-project-link-group-option > input {
         width: auto;
         display: inline-block;
         vertical-align: middle;
         margin: 0px 2px 2px 0px;
     }
-    #dialog-form > div.form-row > span.project-link-group-option > label {
+    #dialog-form > div.form-row > span.ff-project-link-group-option > label {
         width: 250px;
         display: inline-block;
     }
@@ -17,74 +17,74 @@
 <script type="text/html" data-template-name="project link in">
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name">Name</span></label>
-        <input type="text" id="node-input-name" class="node-input-width">
+        <input type="text" id="node-input-name" class="ff-project-link-input-width">
     </div>
-    <div class="form-row project-list-row">
+    <div class="form-row ff-project-link-list-row">
         <label><i class="fa fa-sign-in"></i> <span>Source</span></label>
-        <span class="project-link-group-option">
-            <input type="radio" id="radio-input-direct" name="broadcast" value="false" checked />
-            <label for="radio-input-direct">Receive messages sent to this project</label>
+        <span class="ff-project-link-group-option">
+            <input type="radio" id="ff-project-link-radio-input-direct" name="ff-project-link-broadcast" value="false" checked />
+            <label for="ff-project-link-radio-input-direct">Receive messages sent to this project</label>
         </span>
     </div>
-    <div class="form-row project-list-row">
+    <div class="form-row ff-project-link-list-row">
         <label><span>&nbsp</span></label>
-        <span class="project-link-group-option">
-            <input type="radio" id="radio-input-broadcast" name="broadcast" value="true" />
-            <label for="radio-input-broadcast">Listen for broadcast messages from</label>
+        <span class="ff-project-link-group-option">
+            <input type="radio" id="ff-project-link-radio-input-broadcast" name="ff-project-link-broadcast" value="true" />
+            <label for="ff-project-link-radio-input-broadcast">Listen for broadcast messages from</label>
         </span>
     </div>
-    <div class="form-row project-list-row">
+    <div class="form-row ff-project-link-list-row">
         <label><span>&nbsp</span></label>
-        <select id="node-input-projectList" class="node-input-width" disabled>
+        <select id="node-input-projectList" class="ff-project-link-input-width" disabled>
         </select>
     </div>
     <div class="form-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
-        <input type="text" id="node-input-topic" class="node-input-width">
+        <input type="text" id="node-input-topic" class="ff-project-link-input-width">
     </div>
 </script>
 
 <script type="text/html" data-template-name="project link out">
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name">Name</span></label>
-        <input type="text" id="node-input-name" class="node-input-width">
+        <input type="text" id="node-input-name" class="ff-project-link-input-width">
     </div>
     <div class="form-row">
         <label for="node-input-mode"><i class="fa fa-cog"></i> <span>Mode</span></label>
-        <select id="node-input-mode" class="node-input-width">
+        <select id="node-input-mode" class="ff-project-link-input-width">
             <option value="link" selected>Send to specified project node</option>
             <option value="return">Return to project link call</option>
         </select>
     </div>
 
-    <div class="form-row project-list-row">
+    <div class="form-row ff-project-link-list-row">
         <label><i class="fa fa-sign-out"></i> <span>Target</span></label>
-        <span class="project-link-group-option">
-            <input type="radio" id="radio-input-direct" name="broadcast" value="false" checked />
-            <label for="radio-input-direct">Send message to project</label>
+        <span class="ff-project-link-group-option">
+            <input type="radio" id="ff-project-link-radio-input-direct" name="ff-project-link-broadcast" value="false" checked />
+            <label for="ff-project-link-radio-input-direct">Send message to project</label>
         </span>
     </div>
-    <div class="form-row project-list-row">
+    <div class="form-row ff-project-link-list-row">
         <label><span>&nbsp</span></label>
-        <select id="node-input-projectList" class="node-input-width" disabled>
+        <select id="node-input-projectList" class="ff-project-link-input-width" disabled>
         </select>
     </div>
-    <div class="form-row project-list-row">
+    <div class="form-row ff-project-link-list-row">
         <label><span>&nbsp</span></label>
-        <span class="project-link-group-option">
-            <input type="radio" id="radio-input-broadcast" name="broadcast" value="true" />
-            <label for="radio-input-broadcast">Broadcast message to all projects</label>
+        <span class="ff-project-link-group-option">
+            <input type="radio" id="ff-project-link-radio-input-broadcast" name="ff-project-link-broadcast" value="true" />
+            <label for="ff-project-link-radio-input-broadcast">Broadcast message to all projects</label>
         </span>
     </div>
     <div class="form-row link-topic-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
-        <input type="text" id="node-input-topic" class="node-input-width">
+        <input type="text" id="node-input-topic" class="ff-project-link-input-width">
     </div>
 </script>
 <script type="text/html" data-template-name="project link call">
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name">Name</span></label>
-        <input type="text" id="node-input-name" class="node-input-width">
+        <input type="text" id="node-input-name" class="ff-project-link-input-width">
     </div>
     <div class="form-row">
         <label for="node-input-timeout"><i class="fa fa-clock-o"></i> <span data-i18n="exec.label.timeout"></span>Timeout</label>
@@ -93,12 +93,12 @@
     </div>
     <div class="form-row">
         <label for="node-input-projectList"><i class="fa fa-sign-out"></i> <span>Target</span></label>
-        <select id="node-input-projectList" class="node-input-width">
+        <select id="node-input-projectList" class="ff-project-link-input-width">
         </select>
     </div>
     <div class="form-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
-        <input type="text" id="node-input-topic" class="node-input-width">
+        <input type="text" id="node-input-topic" class="ff-project-link-input-width">
     </div>
 </script>
 
@@ -137,10 +137,10 @@
         $('#node-input-topic').val(node.topic)
         $('#node-input-timeout').val(node.timeout)
         $('#node-input-mode').val(node.mode)
-        $('input:radio[name="broadcast"]').val([isBroadcast.toString()])
+        $('input:radio[name="ff-project-link-broadcast"]').val([isBroadcast.toString()])
 
         // watch for switch between broadcast and p2p
-        $('input:radio[name="broadcast"]').on('change', function (e) {
+        $('input:radio[name="ff-project-link-broadcast"]').on('change', function (e) {
             isBroadcast = e.target.value === 'true'
             updateUI()
         })
@@ -158,19 +158,19 @@
         function updateUI () {
             if (node.type === 'project link out' && isReturnMode) {
                 $('.link-topic-row').hide()
-                $('.project-list-row').hide()
+                $('.ff-project-link-list-row').hide()
                 $('#node-input-projectList').prop('disabled', true)
             } else if (node.type === 'project link out') {
                 $('.link-topic-row').show()
-                $('.project-list-row').show()
+                $('.ff-project-link-list-row').show()
                 $('#node-input-projectList').prop('disabled', isBroadcast ? true : null)
             } else if (node.type === 'project link in') {
                 $('.link-topic-row').show()
-                $('.project-list-row').show()
+                $('.ff-project-link-list-row').show()
                 $('#node-input-projectList').prop('disabled', isBroadcast ? null : true)
             } else {
                 $('.link-topic-row').show()
-                $('.project-list-row').show()
+                $('.ff-project-link-list-row').show()
                 $('#node-input-projectList').prop('disabled', null)
             }
         }
@@ -188,7 +188,7 @@
             node.mode = $('#node-input-mode').val()
         }
         if (node.type === 'project link in' || node.type === 'project link out') {
-            node.broadcast = $('input:radio[name="broadcast"]:checked').val() === 'true'
+            node.broadcast = $('input:radio[name="ff-project-link-broadcast"]:checked').val() === 'true'
         }
     }
 
@@ -226,10 +226,10 @@
                     const item = projects[index]
                     el.append(new Option(item.name, item.id, false, item.id === val))
                 }
-                $('input:radio[name="broadcast"]:checked').trigger('change')
+                $('input:radio[name="ff-project-link-broadcast"]:checked').trigger('change')
             })
             .fail(function (jqXHR, textStatus, errorThrown) {
-                $('input:radio[name="broadcast"]:checked').trigger('change')
+                $('input:radio[name="ff-project-link-broadcast"]:checked').trigger('change')
                 console.error(jqXHR, textStatus, errorThrown)
             })
     }
@@ -253,7 +253,7 @@
         inputs: 0,
         outputs: 1,
         icon: 'ff-logo.svg',
-        paletteLabel:'project in',
+        paletteLabel: 'project in',
         outputLabels: function (i) {
             return this.name || 'link in'
         },
@@ -301,7 +301,7 @@
                 return 'ff-logo.svg'
             }
         },
-        paletteLabel:'project out',
+        paletteLabel: 'project out',
         inputLabels: function (i) {
             return this.name || (this.mode === 'return' ? 'link return' : 'link out')
         },
@@ -343,7 +343,7 @@
         inputs: 1,
         outputs: 1,
         icon: 'ff-logo.svg',
-        paletteLabel:'project call',
+        paletteLabel: 'project call',
         inputLabels: function (i) {
             return this.name || 'link call'
         },
@@ -364,8 +364,12 @@
 </script>
 
 <script type="text/html" data-help-name="project link in">
-    <p>Receive messages from other projects</p>
-    <h3>Properties</h3>
+    <p>Receive messages from other projects within your FlowForge Team</p>
+    <h3>Details</h3>
+    <p>This node can either listen for messages broadcast by other projects,
+        or listen for messages sent directly to this project.</p>
+    <p>The node is configured with a <code>path</code> to listen on. This allows
+       messages to be</p>
     <dl class="message-properties">
         <dt><i>source</i></dt>
         <dd>
