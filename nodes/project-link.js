@@ -464,8 +464,11 @@ module.exports = function (RED) {
                         }
                         try {
                             client.publish(topic, message, pubOptions, (err, packet) => {
-                                if (err) { throw err }
-                                resolve(packet)
+                                if (err) {
+                                    reject(err)
+                                } else {
+                                    resolve(packet)
+                                }
                             })
                         } catch (error) {
                             reject(error)
