@@ -864,8 +864,8 @@ module.exports = function (RED) {
         const url = `${RED.settings.flowforge.forgeURL}/api/${API_VERSION}/teams/${RED.settings.flowforge.teamID}/projects`
         try {
             const data = await got.get(url, {
-                apiH: {
-                    authorization: `Bearer ${RED.settings.flowforge.projectLink.token}`
+                headers: {
+                    Authorization: `Bearer ${RED.settings.flowforge.projectLink.token}`
                 },
                 timeout: {
                     request: 4000
