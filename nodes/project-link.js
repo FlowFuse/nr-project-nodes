@@ -23,11 +23,9 @@ module.exports = function (RED) {
      * An event generated when a link call is executed
      * @typedef {object} MessageEvent
      * @property {string} eventId
-     * @property {object} node
-     * @property {string} node.id
-     * @property {string} node.type
+     * @property {string} node
      * @property {string} project
-     * @property {string} path
+     * @property {string} topic
      * @property {number} ts
      */
 
@@ -37,10 +35,6 @@ module.exports = function (RED) {
      */
 
     // #endregion JSDoc
-
-    // Node globals
-    /** @type {MessageEvents} */
-    const messageEvents = {}
 
     // #region Helpers
 
@@ -140,7 +134,15 @@ module.exports = function (RED) {
 
     function buildLinkTopic (node, project, subTopic, broadcast, isCallResponse) {
         const topicParts = [TOPIC_HEADER, TOPIC_VERSION, RED.settings.flowforge.teamID]
-        if (node.type === 'project link in') {
+        if (!node || node.type === 'project link call') {
+            topicParts.push('p')
+            topicParts.push(project)
+            if (isCallResponse) {
+                topicParts.push('res')
+            } else {
+                topicParts.push('in')
+            }
+        } else if (node.type === 'project link in') {
             topicParts.push('p')
             if (broadcast && project === 'all') {
                 topicParts.push('+')
@@ -159,14 +161,6 @@ module.exports = function (RED) {
                 topicParts.push('out')
             } else {
                 topicParts.push(project)
-                topicParts.push('in')
-            }
-        } else if (node.type === 'project link call') {
-            topicParts.push('p')
-            topicParts.push(project)
-            if (isCallResponse) {
-                topicParts.push('res')
-            } else {
                 topicParts.push('in')
             }
         }
@@ -202,6 +196,7 @@ module.exports = function (RED) {
          * @param {MQTT.IPublishPacket} packet
          */
         function onMessage (topic, message, packet) {
+            // console.log(`RECV ${topic}`)
             const subID = packet.properties?.subscriptionIdentifier
             let lookupTopic = topic
             if (subID === 1) {
@@ -228,6 +223,11 @@ module.exports = function (RED) {
             let err, msg
             try {
                 msg = JSON.parse(message.toString(), jsonReviver)
+                msg.projectLink = {
+                    ...msg.projectLink,
+                    projectId: packet.properties?.userProperties?._projectID,
+                    topic: topic.split('/').slice(6).join('/')
+                }
             } catch (error) {
                 err = error
             }
@@ -394,7 +394,7 @@ module.exports = function (RED) {
                             return reject(new Error('client not initialised')) // if the client is not initialised, cannot subscribe!
                         }
                         try {
-                            console.log(`SUB ${topic}`)
+                            // console.log(`SUB ${topic}`)
                             client.subscribe(topic, subOptions)
                             resolve(true)
                         } catch (error) {
@@ -453,7 +453,7 @@ module.exports = function (RED) {
                 pubOptions.properties.userProperties = pubOptions.properties.userProperties || {}
                 pubOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID
                 pubOptions.properties.userProperties._nodeID = node.id
-                pubOptions.properties.userProperties._publishTime = new Date()
+                pubOptions.properties.userProperties._publishTime = Date.now()
                 pubOptions.properties.contentType = 'application/json'
                 const publishPromise = function (topic, message, pubOptions) {
                     return new Promise((resolve, reject) => {
@@ -462,8 +462,11 @@ module.exports = function (RED) {
                         }
                         try {
                             client.publish(topic, message, pubOptions, (err, packet) => {
-                                if (err) { throw err }
-                                resolve(packet)
+                                if (err) {
+                                    reject(err)
+                                } else {
+                                    resolve(packet)
+                                }
                             })
                         } catch (error) {
                             reject(error)
@@ -657,16 +660,6 @@ module.exports = function (RED) {
             })
 
         this.on('input', function (msg, send, done) {
-            if (Array.isArray(msg._proLinkRoute) && msg._proLinkRoute.length > 0) {
-                // this came from a project link call. Peek last
-                /** @type {MessageEvent} */
-                const thisRoute = msg._proLinkRoute[msg._proLinkRoute.length - 1]
-                if (thisRoute && thisRoute.project && thisRoute.path && thisRoute.eventId && messageEvents[thisRoute.eventId]) {
-                    const messageEvent = messageEvents[thisRoute.eventId]
-                    const receiveKey = `${thisRoute.node.id}:${thisRoute.project}`
-                    messageEvent.receivers[receiveKey] = Date.now()
-                }
-            }
             send(msg)
             done()
         })
@@ -699,11 +692,11 @@ module.exports = function (RED) {
         node.on('input', async function (msg, _send, done) {
             try {
                 if (node.mode === 'return') {
-                    if (Array.isArray(msg._proLinkRoute) && msg._proLinkRoute.length > 0) {
+                    if (msg.projectLink?.callStack?.length > 0) {
                         /** @type {MessageEvent} */
-                        const messageEvent = msg._proLinkRoute.pop()
-                        if (messageEvent && messageEvent.project && messageEvent.path && messageEvent.eventId) {
-                            const responseTopic = buildLinkTopic(messageEvent.node, messageEvent.project, messageEvent.path, node.broadcast, true)
+                        const messageEvent = msg.projectLink.callStack.pop()
+                        if (messageEvent && messageEvent.project && messageEvent.topic && messageEvent.eventId) {
+                            const responseTopic = buildLinkTopic(null, messageEvent.project, messageEvent.topic, node.broadcast, true)
                             const properties = {
                                 correlationData: messageEvent.eventId
                             }
@@ -717,7 +710,7 @@ module.exports = function (RED) {
                     done()
                 } else if (node.mode === 'link') {
                     const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, false, false)
-                    console.log(`PUB ${topic}`)
+                    // console.log(`PUB ${topic}`)
                     await mqtt.publish(node, topic, msg)
                     done()
                 }
@@ -746,11 +739,13 @@ module.exports = function (RED) {
         node.project = n.project
         node.subTopic = n.topic
         node.topic = buildLinkTopic(node, node.project, node.subTopic, false, false)
-        node.responseTopic = buildLinkTopic(node, node.project, node.subTopic, false, true)
+        node.responseTopic = buildLinkTopic(node, RED.settings.flowforge.projectID, node.subTopic, false, true)
         let timeout = parseFloat(n.timeout || '30') * 1000
         if (isNaN(timeout)) {
             timeout = 30000
         }
+        /** @type {MessageEvents} */
+        const messageEvents = {}
 
         function onSub (err, topic, msg, packet) {
             const t = parseLinkTopic(topic)
@@ -780,17 +775,13 @@ module.exports = function (RED) {
 
         node.on('input', async function (msg, send, done) {
             try {
-                msg._proLinkRoute = msg._proLinkRoute || []
                 const eventId = crypto.randomBytes(14).toString('hex')
                 /** @type {MessageEvent} */
                 const messageEvent = {
                     eventId: eventId,
-                    node: {
-                        id: node.id,
-                        type: node.type
-                    },
-                    project: node.project,
-                    path: node.subTopic,
+                    node: node.id,
+                    project: RED.settings.flowforge.projectID,
+                    topic: node.subTopic,
                     ts: Date.now()
                 }
                 /** @type {MessageEvents} */
@@ -801,13 +792,17 @@ module.exports = function (RED) {
                     responseTopic: node.responseTopic,
                     send,
                     done,
-                    receivers: {}, // A lookup of ProjectLinkIn nodes for tracking all msgs generated by matching project-link-in
-                    ts: setTimeout(function () {
+                    timeout: setTimeout(function () {
                         timeoutMessage(eventId)
                     }, timeout)
                 }
-                msg._proLinkRoute.push(messageEvent)
-                msg._proLinkOrigin = msg._proLinkOrigin || { ...messageEvent }
+                if (!msg.projectLink) {
+                    msg.projectLink = {
+                        callStack: []
+                    }
+                }
+                msg.projectLink.callStack = msg.projectLink.callStack || []
+                msg.projectLink.callStack.push(messageEvent)
 
                 const options = {
                     properties: {
@@ -836,19 +831,15 @@ module.exports = function (RED) {
 
         node.returnLinkMessage = function (eventId, msg) {
             try {
-                if (Array.isArray(msg._proLinkRoute) && msg._proLinkRoute.length === 0) {
-                    delete msg._proLinkRoute
+                if (msg.projectLink?.callStack?.length === 0) {
+                    delete msg.projectLink.callStack
                 }
                 const messageEvent = messageEvents[eventId]
                 if (messageEvent) {
-                    const receiveKey = `${messageEvent.node.id}:${messageEvent.project}`
-                    delete messageEvent.receivers[receiveKey]
                     messageEvent.send(msg)
-                    if (Object.keys(messageEvent.receivers).length === 0) {
-                        clearTimeout(messageEvent.ts)
-                        delete messageEvents[eventId]
-                        messageEvent.done()
-                    }
+                    clearTimeout(messageEvent.timeout)
+                    delete messageEvents[eventId]
+                    messageEvent.done()
                 } else {
                     node.send(msg)
                 }
@@ -872,8 +863,8 @@ module.exports = function (RED) {
         const url = `${RED.settings.flowforge.forgeURL}/api/${API_VERSION}/teams/${RED.settings.flowforge.teamID}/projects`
         try {
             const data = await got.get(url, {
-                apiH: {
-                    authorization: `Bearer ${RED.settings.flowforge.projectLink.token}`
+                headers: {
+                    Authorization: `Bearer ${RED.settings.flowforge.projectLink.token}`
                 },
                 timeout: {
                     request: 4000

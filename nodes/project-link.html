@@ -39,7 +39,7 @@
         </select>
     </div>
     <div class="form-row">
-        <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
+        <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Topic</span></label>
         <input type="text" id="node-input-topic" class="ff-project-link-input-width">
     </div>
 </script>
@@ -77,7 +77,7 @@
         </span>
     </div>
     <div class="form-row ff-project-link-topic-row">
-        <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
+        <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Topic</span></label>
         <input type="text" id="node-input-topic" class="ff-project-link-input-width">
     </div>
 </script>
@@ -97,7 +97,7 @@
         </select>
     </div>
     <div class="form-row">
-        <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Path</span></label>
+        <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Topic</span></label>
         <input type="text" id="node-input-topic" class="ff-project-link-input-width">
     </div>
 </script>
@@ -368,94 +368,100 @@
     <h3>Details</h3>
     <p>This node can either listen for messages broadcast by other projects,
         or listen for messages sent directly to this project.</p>
-    <p>The node is configured with a <code>path</code> to listen on. This allows
-       messages to be</p>
-    <dl class="message-properties">
-        <dt><i>source</i></dt>
-        <dd>
-            The project to watch for messages
-        </dd>
-        <dt><i>path</i> <span class="property-type">string</span></dt>
-        <dd>
-            A free form, slash separated path that identifies this link. 
-            Example: a path of 'sensor/temperature' would receive message sent from a 
-            Project Link Out or Project Link Call with the same <code>target</code> 
-            and <code>path</code>.
-        </dd>
-    </dl>
+    <p>The node is configured with a <code>topic</code> to listen on. This works
+       like an MQTT topic - allowing projects to send messages targeting different
+       subscribers.</p>
+    <p>The node does not support MQTT wildcard characters - a fully qualified topic
+       must be used.</p>
     <h3>Output</h3>
     <dl class="message-properties">
         <dt><i>msg</i> <span class="property-type">object</span></dt>
         <dd>
-            The <code>msg</code> object sent from a Project Link Out or Project Link 
-            Call with the same <code>target</code> and <code>path</code>
+            The message sent by another project to this node.
+        </dd>
+        <dt><i>projectLink</i> <span class="property-type">object</span></dt>
+        <dd>
+            This property contains information about the source of the message.
+            <ul>
+                <li><code>projectId</code> - the id of the project that sent the message</li>
+                <li><code>topic</code> - the topic the message was received on</li>
+                <li><code>callStack</code> - when using the Project Call node, this contains
+                 information about the call stack. This property must not be modified.</li>
+            </ul>
         </dd>
     </dl>
 </script>
 
 <script type="text/html" data-help-name="project link out">
-    <p>Send messages to other projects</p>
-    <h3>Properties</h3>
-    <dl class="message-properties">
-        <dt><i>mode</i></dt>
-        <dd>
-            The operational mode of this node can be set to either send messages to a 
-            specific <code>project</code> and <code>path</code> or return a message that 
-            originated from a Project Link Call node
-        </dd>
-        <dt><i>target</i></dt>
-        <dd>
-            The project to send messages to
-        </dd>
-        <dt><i>path</i> <span class="property-type">string</span></dt>
-        <dd>
-            A free form, slash separated path that identifies this link. 
-            Example: a path of <code>sensor/temperature</code> would send messages to 
-            the <code>target</code> project where a link node has a matching path
-        </dd>
-    </dl>
+    <p>Send messages to other projects within your FlowForge Team</p>
+    <h3>Details</h3>
+    <p>This node can be used to send messages to other projects.</p>
+    <p>
+        It provides three modes of operation:
+        <ul>
+            <li>send messages to another project</li>
+            <li>broadcast messages to any project listening on the same topic</li>
+            <li>return the message to its sender if it originated from a Project Call node</li>
+        </ul>
+    </p>
+    <p>
+        When configured to send or broadcast messages to other projects, the node
+        is configured with a <code>topic</code> to send on. This works
+        like an MQTT topic - allowing projects to send messages targeting different
+        subscribers.
+    </p>
+    <p>
+        When configured to return the message to the previous Project Call node,
+        the node requires the property <code>msg.projectLink.callStack</code> to
+        be present. This property is set by the Project In node when it receives
+        messages from a Project Call node. If this property is not present, the
+        node will be unable to respond properly.
+    </p>
     <h3>Input</h3>
     <dl class="message-properties">
         <dt><i>msg</i> <span class="property-type">object</span></dt>
         <dd>
-            The message to send to the <code>target</code> project <code>path</code>
+            <p>The node will send the complete message object it receives.</p>\
+            <p>Due to the way messages are sent, not all types of property will
+                be included. For example, the <code>msg.req</code> and <code>msg.res</code> properties
+                used by the HTTP nodes will not be sent.
+            </p>
         </dd>
     </dl>
 </script>
 
 <script type="text/html" data-help-name="project link call">
-    <p>Send messages to other projects and get a response</p>
-    <h3>Properties</h3>
-    <dl class="message-properties">
-        <dt><i>timeout</i><span class="property-type">number</span></dt>
-        <dd>
-            The number of seconds to wait for the sent <code>msg</code> to be returned
-            before raising a <code>timeout</code> error
-        </dd>
-        <dt><i>target</i></dt>
-        <dd>
-            The project to send messages to
-        </dd>
-        <dt><i>path</i> <span class="property-type">string</span></dt>
-        <dd>
-            A free form, slash separated path that identifies this link. 
-            Example: a path of <code>sensor/temperature</code> would send messages to 
-            the <code>target</code> project where a link node has a matching path
-        </dd>
-    </dl>
-    <h3>Input</h3>
-    <dl class="message-properties">
-        <dt><i>msg</i> <span class="property-type">object</span></dt>
-        <dd>
-            The message to send to the <code>target</code> project <code>path</code>
-        </dd>
-    </dl>
+    <p>Send messages to other projects with your FlowForge Team and get a response back</p>
+    <h3>Details</h3>
+    <p>
+        This node can be used to send messages to other projects and then wait
+        for a response to be sent back.
+    </p>
+    <p>
+        The node can be configured with a <code>timeout</code> for how long it
+        should wait for a response. If a response does not arrive, it will log
+        an error that can be caught with a Catch node
+    </p>
+    <p>
+        The node is configured with a <code>topic</code> to send on. This works
+        like an MQTT topic - allowing projects to send messages targeting different
+        subscribers.
+    </p>
     <h3>Output</h3>
     <dl class="message-properties">
         <dt><i>msg</i> <span class="property-type">object</span></dt>
         <dd>
-            The <code>msg</code> object sent from a Project Link Out node set to
-            <code>return</code> mode
+            The message sent by another project to this node.
+        </dd>
+        <dt><i>projectLink</i> <span class="property-type">object</span></dt>
+        <dd>
+            This property contains information about the source of the message.
+            <ul>
+                <li><code>projectId</code> - the id of the project that sent the message</li>
+                <li><code>topic</code> - the topic the message was received on</li>
+                <li><code>callStack</code> - when using the Project Call node, this contains
+                    information about the call stack. This property must not be modified.</li>
+               </ul>
         </dd>
     </dl>
 </script>

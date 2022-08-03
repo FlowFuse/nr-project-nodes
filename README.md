@@ -1,50 +1,31 @@
-# flowforge-nr-project-nodes
+# FlowForge Project Nodes
 
-Node-RED project link nodes for the FlowForge platform.
+A collection of Node-RED nodes for easy communication between projects running
+in the FlowForge platform.
 
-This package provides a set of nodes to provide project to project
-intercommunication on the FlowForge platform.
+These nodes act in a similar way to the core Node-RED Link nodes - but can be
+used to send and receive messages between different Node-RED projects.
 
-### About
+Whilst these nodes are published under the Apache-2.0 license, they can only be
+used with an instance of the FlowForge platform with an active EE license applied.
 
-The basic premise of the project link nodes are similar to that of the core Node-RED link nodes whereby there are 3 nodes that provide invisible linkage between nodes. However, the project link nodes operate across multiple Node-RED projects
+### Nodes
 
-#### Nodes...
-* project link in
-* project link out
-* project link call
+There are three nodes in this collection:
 
-The whole `msg` object is transmitted from project to project meaning that properties like `msg.topic` and `msg.my_custom_property` will be included in the transmission
+ - `Project In` - listens for messages being broadcast by other projects, or for
+   messages being sent just to this project
+ - `Project Out` - sends messages to other projects
+ - `Project Call` - sends messages to other projects and waits for a response
 
-#### project link in
-This node listens for `msg`s sent by either `project link call` or `project link out`
-
-#### project link out
-This node sends `msg`s to the target project/path and will be received by a matching `project link in` node
-
-#### project link call
-This node sends `msg`s to the target `project link in` project/. 
-The `msg` MUST be returned by a `project link out` set to mode "return"
-The returned `msg` will then be sent out of the `project link call` output
-
-### Known issues
-* Only the below data types are supported. Other data types will either be converted to an `object` or `string` or will cause an error
-  * `boolean`
-  * `string`
-  * `integer`
-  * `BigInt`
-  * `array`
-  * `object`
-  * `Buffer`
-  * `Set`
-  * `Map`
-* Properties in the `msg` with a value of `undefined` will be converted to `null`.
-This is a current short coming of the internal data serialisation and de-serialisation methods
+The nodes send the whole `msg` object between projects. Due to the way the nodes
+encode messages, there are some data types that do not get sent. For example,
+the `msg.req`/`msg.res` properties used by the core HTTP nodes will not be sent.
 
 ### Configuration
 
-The settings file must contain a flowForge setting and other properties in order for the node to loaded into the runtime.
-If these are missing, the node will NOT be loaded.
+To enable the nodes in the palette, they require a number of properties to be provided
+in the runtime's `settings.js` file.
 
 ```
     flowForge: {
@@ -57,25 +38,8 @@ If these are missing, the node will NOT be loaded.
                 url: '',
                 username: 'xxxx',
                 password: 'xxxx',
-                clientID: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:n'
             }
         }
     }
 ```
-
-### TODO
-
-* Built in help
-* Tests
-* Better readme
-* Support more data types in the transmission
-
-### Future possibilities
-
-* Allow wildcard paths
-  * e.g. link out to multiple `devices/#`
-* Allow link call to broadcast
-* Autocomplete `path`s by publishing subscribed `path`s to retained `$` 
-  * This may lead to a tree view of projects and paths instead of separate form elements
-* Show link dotted wire and a deep linking shortcut to the target project/node
 
