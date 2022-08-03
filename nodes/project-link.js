@@ -746,6 +746,7 @@ module.exports = function (RED) {
         if (isNaN(timeout)) {
             timeout = 30000
         }
+        /** @type {MessageEvents} */
         const messageEvents = {}
 
         function onSub (err, topic, msg, packet) {
