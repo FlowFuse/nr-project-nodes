@@ -23,11 +23,9 @@ module.exports = function (RED) {
      * An event generated when a link call is executed
      * @typedef {object} MessageEvent
      * @property {string} eventId
-     * @property {object} node
-     * @property {string} node.id
-     * @property {string} node.type
+     * @property {string} node
      * @property {string} project
-     * @property {string} path
+     * @property {string} topic
      * @property {number} ts
      */
 
@@ -697,8 +695,8 @@ module.exports = function (RED) {
                     if (msg.projectLink?.callStack?.length > 0) {
                         /** @type {MessageEvent} */
                         const messageEvent = msg.projectLink.callStack.pop()
-                        if (messageEvent && messageEvent.project && messageEvent.path && messageEvent.eventId) {
-                            const responseTopic = buildLinkTopic(null, messageEvent.project, messageEvent.path, node.broadcast, true)
+                        if (messageEvent && messageEvent.project && messageEvent.topic && messageEvent.eventId) {
+                            const responseTopic = buildLinkTopic(null, messageEvent.project, messageEvent.topic, node.broadcast, true)
                             const properties = {
                                 correlationData: messageEvent.eventId
                             }
@@ -783,7 +781,7 @@ module.exports = function (RED) {
                     eventId: eventId,
                     node: node.id,
                     project: RED.settings.flowforge.projectID,
-                    path: node.subTopic,
+                    topic: node.subTopic,
                     ts: Date.now()
                 }
                 /** @type {MessageEvents} */
