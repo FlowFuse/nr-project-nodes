@@ -3,8 +3,7 @@ module.exports = function (RED) {
 
     // Do not register nodes in runtime if settings not provided
     if (!RED.settings.flowforge || !RED.settings.flowforge.projectID || !RED.settings.flowforge.teamID || !RED.settings.flowforge.projectLink) {
-        RED.log.warn('Project Link nodes require flowforge settings')
-        return
+        throw new Error('Project Link nodes cannot be loaded outside of flowforge EE environment')
     }
 
     // Imports
