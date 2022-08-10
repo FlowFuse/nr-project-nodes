@@ -8,6 +8,9 @@ used to send and receive messages between different Node-RED projects.
 
 Whilst these nodes are published under the Apache-2.0 license, they can only be
 used with an instance of the FlowForge platform with an active EE license applied.
+If you try to install these nodes in an Non FlowForge EE platform you will see the following error in your Node-RED log:
+`Error: Project Link nodes cannot be loaded outside of flowforge EE environment`
+This can be safely ignored.
 
 ### Prerequisites
 
