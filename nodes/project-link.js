@@ -487,6 +487,7 @@ module.exports = function (RED) {
                     /** @type {MQTT.IClientOptions} */
                     const defaultOptions = {
                         protocolVersion: 5,
+                        keepalive: 30,
                         reconnectPeriod: RED.settings.mqttReconnectTime || 5000,
                         properties: {
                             requestResponseInformation: true,
