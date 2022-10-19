@@ -3,7 +3,9 @@
     "version": "0.1.1",
     "description": "A collection of Node-RED nodes for easy communication between projects running in the FlowForge platform",
     "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "lint": "eslint -c .eslintrc --ext js,html nodes/**/*.js",
+        "lint:fix": "eslint -c .eslintrc --ext js,html nodes/**/*.js --fix"
     },
     "repository": {
         "type": "git",
@@ -16,8 +18,8 @@
     },
     "homepage": "https://github.com/flowforge/flowforge-nr-project-nodes#readme",
     "devDependencies": {
-        "eslint": "^7.32.0",
-        "eslint-config-standard": "^16.0.3",
+        "eslint": "^8.25.0",
+        "eslint-config-standard": "^17.0.0",
         "eslint-plugin-html": "7.1.0"
     },
     "node-red": {

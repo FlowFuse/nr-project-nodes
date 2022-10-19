@@ -63,7 +63,7 @@ module.exports = function (RED) {
     }
 
     function jsonReplacer (_key, value) {
-        const wrapper = (type, data) => { return { type: type, data: data } }
+        const wrapper = (type, data) => { return { type, data } }
         if (typeof value === 'undefined') {
             return wrapper('undefined', '')
         } else if (typeof value === 'bigint') {
@@ -777,7 +777,7 @@ module.exports = function (RED) {
                 const eventId = crypto.randomBytes(14).toString('hex')
                 /** @type {MessageEvent} */
                 const messageEvent = {
-                    eventId: eventId,
+                    eventId,
                     node: node.id,
                     project: RED.settings.flowforge.projectID,
                     topic: node.subTopic,
