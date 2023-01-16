@@ -228,6 +228,11 @@ module.exports = function (RED) {
                     projectId: packet.properties?.userProperties?._projectID,
                     topic: topic.split('/').slice(6).join('/')
                 }
+                if (packet.properties?.userProperties?._deviceId) {
+                    msg.projectLink.deviceId = packet.properties?.userProperties?._deviceId
+                    msg.projectLink.deviceName = packet.properties?.userProperties?._deviceName
+                    msg.projectLink.deviceType = packet.properties?.userProperties?._deviceType
+                }
             } catch (error) {
                 err = error
             }
@@ -452,6 +457,11 @@ module.exports = function (RED) {
                 pubOptions.properties = Object.assign({}, options.properties)
                 pubOptions.properties.userProperties = pubOptions.properties.userProperties || {}
                 pubOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID
+                if (process.env.FF_DEVICE_ID) {
+                    pubOptions.properties.userProperties._deviceId = process.env.FF_DEVICE_ID
+                    pubOptions.properties.userProperties._deviceName = process.env.FF_DEVICE_NAME
+                    pubOptions.properties.userProperties._deviceType = process.env.FF_DEVICE_TYPE
+                }
                 pubOptions.properties.userProperties._nodeID = node.id
                 pubOptions.properties.userProperties._publishTime = Date.now()
                 pubOptions.properties.contentType = 'application/json'
