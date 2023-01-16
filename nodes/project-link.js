@@ -10,6 +10,7 @@ module.exports = function (RED) {
     const crypto = require('crypto')
     const got = require('got')
     const MQTT = require('mqtt')
+    const urlModule = require('url')
 
     // Constants
     const API_VERSION = 'v1'
@@ -517,9 +518,19 @@ module.exports = function (RED) {
                     connAck.returnCode = null
 
                     connecting = true
-                    // TEMP for dev testing
-                    const url = RED.settings.flowforge.projectLink.broker.url || 'mqtt://localhost:1883'
-                    client = MQTT.connect(url, options)
+                    // PROBLEM: ipv6 ws addresses cannot connect
+                    // INFO: Calling mqtt.connect('http://[::1]:8883') fails with error  ERR_INVALID_URL
+                    // INFO: Calling mqtt.connect(new URL('http://[::1]:8883')) fails because `connect` only accepts a `string` or `url.parse` object
+                    // INFO: Calling mqtt.connect(url.parse('http://[::1]:8883') fails because unlike new URL, url.parse drops the square brackets off hostname
+                    //       (mqtt.js disassembles and reassembles the url using hostname + port so `ws://[::1]:8883` becomes `ws://::1:8883`)
+                    // INFO: WS src code uses `new URL` so when `mqtt.js` passes the reassembled IP `http://::1:8883`, it fails with error ERR_INVALID_URL
+                    // SEE: https://github.com/mqttjs/MQTT.js/issues/1569
+                    const brokerURL = RED.settings.flowforge.projectLink.broker.url || 'mqtt://localhost:1883'
+                    // eslint-disable-next-line n/no-deprecated-api
+                    const parsedURL = urlModule.parse(brokerURL)
+                    const newURL = new URL(brokerURL)
+                    parsedURL.hostname = newURL.hostname
+                    client = MQTT.connect(parsedURL, options)
                     on('connect', onConnect)
                     on('error', onError)
                     on('close', onClose)
