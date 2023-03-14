@@ -3,7 +3,7 @@ module.exports = function (RED) {
 
     // Do not register nodes in runtime if settings not provided
     if (!RED.settings.flowforge || !RED.settings.flowforge.projectID || !RED.settings.flowforge.teamID || !RED.settings.flowforge.projectLink) {
-        throw new Error('Project Link nodes cannot be loaded outside of flowforge EE environment')
+        throw new Error('Project Link nodes cannot be loaded outside of FlowForge EE environment')
     }
 
     // Imports
@@ -225,6 +225,7 @@ module.exports = function (RED) {
                 msg = JSON.parse(message.toString(), jsonReviver)
                 msg.projectLink = {
                     ...msg.projectLink,
+                    instanceId: packet.properties?.userProperties?._projectID,
                     projectId: packet.properties?.userProperties?._projectID,
                     topic: topic.split('/').slice(6).join('/')
                 }

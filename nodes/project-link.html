@@ -23,7 +23,7 @@
         <label><i class="fa fa-sign-in"></i> <span>Source</span></label>
         <span class="ff-project-link-group-option">
             <input type="radio" id="ff-project-link-radio-input-direct" name="ff-project-link-broadcast" value="false" checked />
-            <label for="ff-project-link-radio-input-direct">Receive messages sent to this project</label>
+            <label for="ff-project-link-radio-input-direct">Receive messages sent to this instance</label>
         </span>
     </div>
     <div class="form-row ff-project-link-list-row">
@@ -61,7 +61,7 @@
         <label><i class="fa fa-sign-out"></i> <span>Target</span></label>
         <span class="ff-project-link-group-option">
             <input type="radio" id="ff-project-link-radio-input-direct" name="ff-project-link-broadcast" value="false" checked />
-            <label for="ff-project-link-radio-input-direct">Send message to project</label>
+            <label for="ff-project-link-radio-input-direct">Send message to instance</label>
         </span>
     </div>
     <div class="form-row ff-project-link-list-row">
@@ -73,7 +73,7 @@
         <label><span>&nbsp</span></label>
         <span class="ff-project-link-group-option">
             <input type="radio" id="ff-project-link-radio-input-broadcast" name="ff-project-link-broadcast" value="true" />
-            <label for="ff-project-link-radio-input-broadcast">Broadcast message to all projects</label>
+            <label for="ff-project-link-radio-input-broadcast">Broadcast message to all instances</label>
         </span>
     </div>
     <div class="form-row ff-project-link-topic-row">
@@ -219,7 +219,7 @@
                 // broadcast not permitted in link call at this time but has been
                 // considered in the code base - possible future iteration
                 if (nodeType === 'project link in') {
-                    el.append(new Option('all projects', 'all', false, val === 'all'))
+                    el.append(new Option('all instances', 'all', false, val === 'all'))
                 }
                 const projects = (data.count ? data.projects : null) || []
                 for (let index = 0; index < projects.length; index++) {
@@ -364,10 +364,10 @@
 </script>
 
 <script type="text/html" data-help-name="project link in">
-    <p>Receive messages from other projects within your FlowForge Team</p>
+    <p>Receive messages from other Node-RED instances within your FlowForge Team</p>
     <h3>Details</h3>
-    <p>This node can either listen for messages broadcast by other projects,
-        or listen for messages sent directly to this project.</p>
+    <p>This node can either listen for messages broadcast by other instances,
+        or listen for messages sent directly to this instance.</p>
     <p>The node is configured with a <code>topic</code> to listen on. This works
        like an MQTT topic - allowing projects to send messages targeting different
        subscribers.</p>
@@ -377,13 +377,14 @@
     <dl class="message-properties">
         <dt><i>msg</i> <span class="property-type">object</span></dt>
         <dd>
-            The message sent by another project to this node.
+            The message sent by another Node-RED instance to this node.
         </dd>
         <dt><i>projectLink</i> <span class="property-type">object</span></dt>
         <dd>
             This property contains information about the source of the message.
             <ul>
-                <li><code>projectId</code> - the id of the project that sent the message</li>
+                <li><code>instanceId</code> - the id of the instance that sent the message</li>
+                <li><code>projectId</code> - <i>deprecated</i>: the id of the instance that sent the message</li>
                 <li><code>deviceId</code> - if present, the id of the device that sent the message</li>
                 <li><code>deviceName</code> - if present, the name of the device that sent the message</li>
                 <li><code>deviceType</code> - if present, the type of the device that sent the message</li>
@@ -398,19 +399,19 @@
 <script type="text/html" data-help-name="project link out">
     <p>Send messages to other projects within your FlowForge Team</p>
     <h3>Details</h3>
-    <p>This node can be used to send messages to other projects.</p>
+    <p>This node can be used to send messages to other Node-RED instances.</p>
     <p>
         It provides three modes of operation:
         <ul>
-            <li>send messages to another project</li>
-            <li>broadcast messages to any project listening on the same topic</li>
+            <li>send messages to another instance</li>
+            <li>broadcast messages to any instance listening on the same topic</li>
             <li>return the message to its sender if it originated from a Project Call node</li>
         </ul>
     </p>
     <p>
-        When configured to send or broadcast messages to other projects, the node
+        When configured to send or broadcast messages to other instances, the node
         is configured with a <code>topic</code> to send on. This works
-        like an MQTT topic - allowing projects to send messages targeting different
+        like an MQTT topic - allowing instances to send messages targeting different
         subscribers.
     </p>
     <p>
@@ -434,10 +435,10 @@
 </script>
 
 <script type="text/html" data-help-name="project link call">
-    <p>Send messages to other projects with your FlowForge Team and get a response back</p>
+    <p>Send messages to other Node-RED instances within your FlowForge Team and get a response back</p>
     <h3>Details</h3>
     <p>
-        This node can be used to send messages to other projects and then wait
+        This node can be used to send messages to other instances and then wait
         for a response to be sent back.
     </p>
     <p>
@@ -447,20 +448,21 @@
     </p>
     <p>
         The node is configured with a <code>topic</code> to send on. This works
-        like an MQTT topic - allowing projects to send messages targeting different
+        like an MQTT topic - allowing instances to send messages targeting different
         subscribers.
     </p>
     <h3>Output</h3>
     <dl class="message-properties">
         <dt><i>msg</i> <span class="property-type">object</span></dt>
         <dd>
-            The message sent by another project to this node.
+            The message sent by another instance to this node.
         </dd>
         <dt><i>projectLink</i> <span class="property-type">object</span></dt>
         <dd>
             This property contains information about the source of the message.
             <ul>
-                <li><code>projectId</code> - the id of the project that sent the message</li>
+                <li><code>instanceId</code> - the id of the instance that sent the message</li>
+                <li><code>projectId</code> - <i>deprecated</i>: the id of the instance that sent the message</li>
                 <li><code>deviceId</code> - if present, the id of the device that sent the message</li>
                 <li><code>deviceName</code> - if present, the name of the device that sent the message</li>
                 <li><code>deviceType</code> - if present, the type of the device that sent the message</li>
