@@ -1,7 +1,7 @@
 {
     "name": "@flowforge/nr-project-nodes",
-    "version": "0.2.0",
-    "description": "A collection of Node-RED nodes for easy communication between projects running in the FlowForge platform",
+    "version": "0.2.1",
+    "description": "A collection of Node-RED nodes for easy communication between Node-RED instances running in the FlowForge platform",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "lint": "eslint -c .eslintrc --ext js,html nodes/**/*.js",
@@ -31,7 +31,7 @@
         "node": ">=16.x"
     },
     "dependencies": {
-        "got": "^11.8.5",
+        "got": "^11.8.6",
         "mqtt": "^4.3.7"
     }
 }
