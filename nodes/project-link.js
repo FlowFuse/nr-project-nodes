@@ -510,7 +510,7 @@ module.exports = function (RED) {
                     }
                     options = Object.assign({}, defaultOptions, options)
 
-                    // ensure keepalive is set (defaults to sub 60s to avoid timeout due to AWS ALB timeout that defaults to 60 seconds)
+                    // ensure keepalive is set (defaults to sub 60s to avoid timeout in load balancer)
                     options.keepalive = options.keepalive || 45
 
                     if (RED.settings.flowforge.projectLink.broker.clientId) {
