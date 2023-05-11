@@ -1,3 +1,7 @@
+### 0.2.2
+
+ - Fix frequent disconnections - Ensure keepalive is set (#25) @Steve-Mcl
+
 ### 0.2.1
 
 - Update docs to reflect 'project' to 'instances' naming changes (#23) @knolleary
