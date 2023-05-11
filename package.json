@@ -1,6 +1,6 @@
 {
     "name": "@flowforge/nr-project-nodes",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "description": "A collection of Node-RED nodes for easy communication between Node-RED instances running in the FlowForge platform",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
