@@ -40,7 +40,6 @@ module.exports = function (RED) {
 
     /**
      * Opinionated test to check topic is valid for subscription...
-     * * May start with $share/<group>/
      * * Must not contain  `<space>` `+` `#` `$` `\` `\b` `\f` `\n` `\r` `\t` `\v`
      * * Permits `+` character at index 4 (project name)
      * * Must have at least 1 character between slashes
@@ -49,7 +48,7 @@ module.exports = function (RED) {
      * @returns `true` if it is a valid sub topic
      */
     function isValidSubscriptionTopic (topic) {
-        return /^(?:\$share\/[^/$+#\b\f\n\r\t\v\0\s]+\/)?(?:[^/$+#\b\f\n\r\t\v\0\s]+\/){4}(?:\+|[^/$+#\b\f\n\r\t\v\0\s]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0\s]+?)){2,}$/.test(topic)
+        return /^(?:[^/$+#\b\f\n\r\t\v\0\s]+\/){4}(?:\+|[^/$+#\b\f\n\r\t\v\0\s]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0\s]+?)){2,}$/.test(topic)
     }
 
     /**
@@ -119,7 +118,7 @@ module.exports = function (RED) {
         const isBroadcast = topicParts[5] ? topicParts[5] === 'out' : null
         // eslint-disable-next-line no-unused-vars
         const isDirectTarget = topicParts[5] ? topicParts[5] === 'in' : null
-        const isCallResponse = topicParts[5] ? topicParts[5].startsWith('res') : null
+        const isCallResponse = topicParts[5] ? topicParts[5] === 'res' : null
         const result = {
             topicHeader: topicParts[0],
             topicVersion: topicParts[1],
@@ -133,13 +132,13 @@ module.exports = function (RED) {
         return result
     }
 
-    function buildLinkTopic (node, project, subTopic, broadcast, responseTopic) {
+    function buildLinkTopic (node, project, subTopic, broadcast, isCallResponse) {
         const topicParts = [TOPIC_HEADER, TOPIC_VERSION, RED.settings.flowforge.teamID]
         if (!node || node.type === 'project link call') {
             topicParts.push('p')
             topicParts.push(project)
-            if (responseTopic) {
-                topicParts.push(responseTopic)
+            if (isCallResponse) {
+                topicParts.push('res')
             } else {
                 topicParts.push('in')
             }
@@ -370,15 +369,9 @@ module.exports = function (RED) {
 
                 // generate a lookup based on the subscriptionId + : + topic
                 let lookupTopic = topic
-                // Check for a shared subscription - in which case, need to strip
-                // off the $share/<id>/ as the received messages won't have that
-                // in their topic
-                if (lookupTopic.startsWith('$share')) {
-                    lookupTopic = lookupTopic.split('/').slice(2).join('/')
-                }
                 const subID = [null, 1, 2][node.subscriptionIdentifier]
                 if (subID) {
-                    lookupTopic = subID + ':' + lookupTopic
+                    lookupTopic = subID + ':' + topic
                 }
 
                 /** @type {Set} */
@@ -658,7 +651,7 @@ module.exports = function (RED) {
         node.subscriptionIdentifier = (n.broadcast && n.project === 'all') ? 2 : 1
         node.subTopic = n.topic
         node.broadcast = n.broadcast === true || n.broadcast === 'true'
-        node.topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast)
+        node.topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, false)
         mqtt.connect()
         mqtt.registerStatus(node)
 
@@ -682,7 +675,8 @@ module.exports = function (RED) {
         // broadcasts
         // * specific project out   ff/v1/7N152GxG2p/p/ca65f5ed-aea0-4a10-ac9a-2086b6af6700/out/b1/b1    sub broadcast
         // * +any project+ out      ff/v1/7N152GxG2p/p/+/out/b1/b1    sub broadcast
-        mqtt.subscribe(node, `$share/${RED.settings.flowforge.projectID}/${node.topic}`, { qos: 2 }, onSub)
+
+        mqtt.subscribe(node, node.topic, { qos: 2 }, onSub)
             .then(_result => {})
             .catch(err => {
                 node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
@@ -694,7 +688,7 @@ module.exports = function (RED) {
             done()
         })
         node.on('close', function (done) {
-            mqtt.unsubscribe(node, `$share/${RED.settings.flowforge.projectID}/${node.topic}`, onSub)
+            mqtt.unsubscribe(node, node.topic, onSub)
                 .then(() => {})
                 .catch(_err => {})
                 .finally(() => {
@@ -726,7 +720,7 @@ module.exports = function (RED) {
                         /** @type {MessageEvent} */
                         const messageEvent = msg.projectLink.callStack.pop()
                         if (messageEvent && messageEvent.project && messageEvent.topic && messageEvent.eventId) {
-                            const responseTopic = buildLinkTopic(null, messageEvent.project, messageEvent.topic, node.broadcast, messageEvent.response || 'res')
+                            const responseTopic = buildLinkTopic(null, messageEvent.project, messageEvent.topic, node.broadcast, true)
                             const properties = {
                                 correlationData: messageEvent.eventId
                             }
@@ -739,7 +733,7 @@ module.exports = function (RED) {
                     }
                     done()
                 } else if (node.mode === 'link') {
-                    const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast)
+                    const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, false, false)
                     // console.log(`PUB ${topic}`)
                     await mqtt.publish(node, topic, msg)
                     done()
@@ -768,9 +762,8 @@ module.exports = function (RED) {
         const node = this
         node.project = n.project
         node.subTopic = n.topic
-        node.topic = buildLinkTopic(node, node.project, node.subTopic, false)
-        node.responseTopicPrefix = `res-${crypto.randomBytes(4).toString('hex')}`
-        node.responseTopic = buildLinkTopic(node, RED.settings.flowforge.projectID, node.subTopic, false, node.responseTopicPrefix)
+        node.topic = buildLinkTopic(node, node.project, node.subTopic, false, false)
+        node.responseTopic = buildLinkTopic(node, RED.settings.flowforge.projectID, node.subTopic, false, true)
         let timeout = parseFloat(n.timeout || '30') * 1000
         if (isNaN(timeout)) {
             timeout = 30000
@@ -813,7 +806,6 @@ module.exports = function (RED) {
                     node: node.id,
                     project: RED.settings.flowforge.projectID,
                     topic: node.subTopic,
-                    response: node.responseTopicPrefix,
                     ts: Date.now()
                 }
                 /** @type {MessageEvents} */
