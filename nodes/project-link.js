@@ -731,7 +731,6 @@ module.exports = function (RED) {
                         const messageEvent = msg.projectLink.callStack.pop()
                         if (messageEvent && messageEvent.project && messageEvent.topic && messageEvent.eventId) {
                             const responseTopic = buildLinkTopic(null, messageEvent.project, messageEvent.topic, node.broadcast, messageEvent.response || 'res')
-                            console.log(responseTopic)
                             const properties = {
                                 correlationData: messageEvent.eventId
                             }
