@@ -731,6 +731,7 @@ module.exports = function (RED) {
                         const messageEvent = msg.projectLink.callStack.pop()
                         if (messageEvent && messageEvent.project && messageEvent.topic && messageEvent.eventId) {
                             const responseTopic = buildLinkTopic(null, messageEvent.project, messageEvent.topic, node.broadcast, messageEvent.response || 'res')
+                            console.log(responseTopic)
                             const properties = {
                                 correlationData: messageEvent.eventId
                             }
@@ -776,7 +777,7 @@ module.exports = function (RED) {
         if (RED.settings.flowforge.useSharedSubscriptions) {
             node.responseTopicPrefix = `res-${crypto.randomBytes(4).toString('hex')}`
         } else {
-            node.responseTopicPredix = 'res'
+            node.responseTopicPrefix = 'res'
         }
         node.responseTopic = buildLinkTopic(node, RED.settings.flowforge.projectID, node.subTopic, false, node.responseTopicPrefix)
         let timeout = parseFloat(n.timeout || '30') * 1000
