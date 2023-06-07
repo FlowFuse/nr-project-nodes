@@ -773,7 +773,11 @@ module.exports = function (RED) {
         node.project = n.project
         node.subTopic = n.topic
         node.topic = buildLinkTopic(node, node.project, node.subTopic, false)
-        node.responseTopicPrefix = `res-${crypto.randomBytes(4).toString('hex')}`
+        if (RED.settings.flowforge.useSharedSubscriptions) {
+            node.responseTopicPrefix = `res-${crypto.randomBytes(4).toString('hex')}`
+        } else {
+            node.responseTopicPredix = 'res'
+        }
         node.responseTopic = buildLinkTopic(node, RED.settings.flowforge.projectID, node.subTopic, false, node.responseTopicPrefix)
         let timeout = parseFloat(n.timeout || '30') * 1000
         if (isNaN(timeout)) {
