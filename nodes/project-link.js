@@ -682,7 +682,11 @@ module.exports = function (RED) {
         // broadcasts
         // * specific project out   ff/v1/7N152GxG2p/p/ca65f5ed-aea0-4a10-ac9a-2086b6af6700/out/b1/b1    sub broadcast
         // * +any project+ out      ff/v1/7N152GxG2p/p/+/out/b1/b1    sub broadcast
-        mqtt.subscribe(node, `$share/${RED.settings.flowforge.projectID}/${node.topic}`, { qos: 2 }, onSub)
+        let subscribedTopic = node.topic
+        if (RED.settings.flowforge.useSharedSubscriptions) {
+            subscribedTopic = `$share/${RED.settings.flowforge.projectID}/${node.topic}`
+        }
+        mqtt.subscribe(node, subscribedTopic, { qos: 2 }, onSub)
             .then(_result => {})
             .catch(err => {
                 node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
@@ -694,7 +698,7 @@ module.exports = function (RED) {
             done()
         })
         node.on('close', function (done) {
-            mqtt.unsubscribe(node, `$share/${RED.settings.flowforge.projectID}/${node.topic}`, onSub)
+            mqtt.unsubscribe(node, subscribedTopic, onSub)
                 .then(() => {})
                 .catch(_err => {})
                 .finally(() => {
