@@ -1,3 +1,7 @@
+### 0.3.0
+
+ - Use shared subscriptions where appropriate for HA support (#29) @knolleary
+
 ### 0.2.2
 
  - Fix frequent disconnections - Ensure keepalive is set (#25) @Steve-Mcl
