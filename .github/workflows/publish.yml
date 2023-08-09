@@ -1,0 +1,22 @@
+name: Build and push packages
+
+on:
+  schedule:
+    - cron: '0 23 * * *'
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    uses: 'flowforge/github-actions-workflows/.github/workflows/build_node_package.yml@main'
+
+  publish:
+    needs: build
+    uses: 'flowforge/github-actions-workflows/.github/workflows/publish_node_package.yml@fix-publish-with-npm'
+    with:
+      package_name: nr-project-nodes
+      publish_package: true
