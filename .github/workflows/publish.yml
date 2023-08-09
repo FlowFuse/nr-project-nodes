@@ -16,7 +16,7 @@ jobs:
 
   publish:
     needs: build
-    uses: 'flowforge/github-actions-workflows/.github/workflows/publish_node_package.yml@fix-publish-with-npm'
+    uses: 'flowforge/github-actions-workflows/.github/workflows/publish_node_package.yml@main'
     with:
       package_name: nr-project-nodes
       publish_package: true
