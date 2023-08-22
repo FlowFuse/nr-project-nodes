@@ -23,3 +23,22 @@ jobs:
     with:
       package_name: nr-project-nodes
       publish_package: true
+
+  dispatch_container_build:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate_token
+        uses: tibdex/github-app-token@v1
+        with:
+          app_id: ${{ secrets.GH_BOT_APP_ID }}
+          private_key: ${{ secrets.GH_BOT_APP_KEY }}
+      - name: Trigger node-red container build
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: nodered-container.yml
+          repo: flowforge/helm
+          ref: main
+          token: ${{ steps.generate_token.outputs.token }}
+          inputs: '{"nr_project_nodes_ref": "${{ github.ref }}", "nr_project_nodes_release_name": "${{ needs.publish.outputs.release_name }}"}'
