@@ -1,6 +1,7 @@
 name: Build and push packages
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: '0 23 * * *'
   push:
@@ -18,13 +19,15 @@ jobs:
     needs: build
     if: |
       ( github.event_name == 'push' && github.ref == 'refs/heads/main' ) ||
+      ( github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' ) ||
       github.event_name == 'schedule'
     uses: 'flowforge/github-actions-workflows/.github/workflows/publish_node_package.yml@main'
     with:
       package_name: nr-project-nodes
       publish_package: true
 
-  dispatch_container_build:
+  dispatch:
+    name: Dispatch node-red container build
     needs: publish
     runs-on: ubuntu-latest
     steps:
@@ -39,6 +42,26 @@ jobs:
         with:
           workflow: nodered-container.yml
           repo: flowforge/helm
+          ref: main
+          token: ${{ steps.generate_token.outputs.token }}
+          inputs: '{"nr_project_nodes_ref": "${{ github.ref }}", "nr_project_nodes_release_name": "${{ needs.publish.outputs.release_name }}"}'
+
+  dispatch_nr_launcher:
+    name: Dispatch nr-launcher package build
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate_token
+        uses: tibdex/github-app-token@v1
+        with:
+          app_id: ${{ secrets.GH_BOT_APP_ID }}
+          private_key: ${{ secrets.GH_BOT_APP_KEY }}
+      - name: Trigger nr-launcher package build
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: publish.yml
+          repo: flowforge/flowforge-nr-launcher
           ref: main
           token: ${{ steps.generate_token.outputs.token }}
           inputs: '{"nr_project_nodes_ref": "${{ github.ref }}", "nr_project_nodes_release_name": "${{ needs.publish.outputs.release_name }}"}'
