@@ -844,6 +844,14 @@ module.exports = function (RED) {
                 msg.projectLink.callStack = msg.projectLink.callStack || []
                 msg.projectLink.callStack.push(messageEvent)
 
+                if (msg.res?._res?.constructor?.name === 'ServerResponse' && msg.req?.constructor?.name === 'IncomingMessage') {
+                    // this msg is a HTTP IncomingMessage object - strip out the circular references
+                    delete msg.req
+                    delete msg.res
+                    msg.res = `RES:${eventId}` // this is a special temporary value that will be cross-checked and the original value restored in returnLinkMessage
+                    msg.req = `REQ:${eventId}` // this is a special temporary value that will be cross-checked and the original value restored in returnLinkMessage
+                }
+
                 const options = {
                     properties: {
                         correlationData: eventId
@@ -876,6 +884,12 @@ module.exports = function (RED) {
                 }
                 const messageEvent = messageEvents[eventId]
                 if (messageEvent) {
+                    if (msg.res === `RES:${eventId}` && msg.req === `REQ:${eventId}`) {
+                        // this msg is a HTTP In msg & its req/res was temporarily detached for transmission over
+                        // the link - reattach the original req/res
+                        msg.req = messageEvent.msg.req
+                        msg.res = messageEvent.msg.res
+                    }
                     messageEvent.send(msg)
                     clearTimeout(messageEvent.timeout)
                     delete messageEvents[eventId]
