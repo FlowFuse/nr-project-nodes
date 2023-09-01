@@ -76,11 +76,11 @@ module.exports = function (RED) {
             // NOTE: Map and Set objects that are built in a function VM do NOT
             // evaluate to true when tested for instanceof Map or Set. Instead
             // constructor.name and .entries/.keys properties are used to determine type
-            if (value instanceof Map || (value.constructor.name === 'Map' && value.entries)) {
+            if (value instanceof Map || (value.constructor?.name === 'Map' && value.entries)) {
                 return wrapper('Map', [...value])
-            } else if (value instanceof Set || (value.constructor.name === 'Set' && value.values)) {
+            } else if (value instanceof Set || (value.constructor?.name === 'Set' && value.values)) {
                 return wrapper('Set', [...value])
-            } else if (Buffer.isBuffer(value) || (value.constructor.name === 'Buffer')) {
+            } else if (Buffer.isBuffer(value) || (value.constructor?.name === 'Buffer')) {
                 return value.toJSON()
             }
         }
