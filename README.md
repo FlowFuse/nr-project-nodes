@@ -30,7 +30,8 @@ There are three nodes in this collection:
 
 The nodes send the whole `msg` object. Due to the way the nodes encode messages,
 there are some data types that do not get sent. For example, the `msg.req`/`msg.res`
-properties used by the core HTTP nodes will not be sent.
+properties used by the core HTTP nodes will not be sent.  Instead, they are temporarily
+removed from the message and re-attached when the message is received back.
 
 Each node is configured with a topic on which it either sends or receives messages
 on. This is similar in concept to MQTT topics - although the nodes do not currently

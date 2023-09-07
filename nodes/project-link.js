@@ -76,11 +76,11 @@ module.exports = function (RED) {
             // NOTE: Map and Set objects that are built in a function VM do NOT
             // evaluate to true when tested for instanceof Map or Set. Instead
             // constructor.name and .entries/.keys properties are used to determine type
-            if (value instanceof Map || (value.constructor.name === 'Map' && value.entries)) {
+            if (value instanceof Map || (value.constructor?.name === 'Map' && value.entries)) {
                 return wrapper('Map', [...value])
-            } else if (value instanceof Set || (value.constructor.name === 'Set' && value.values)) {
+            } else if (value instanceof Set || (value.constructor?.name === 'Set' && value.values)) {
                 return wrapper('Set', [...value])
-            } else if (Buffer.isBuffer(value) || (value.constructor.name === 'Buffer')) {
+            } else if (Buffer.isBuffer(value) || (value.constructor?.name === 'Buffer')) {
                 return value.toJSON()
             }
         }
@@ -844,6 +844,14 @@ module.exports = function (RED) {
                 msg.projectLink.callStack = msg.projectLink.callStack || []
                 msg.projectLink.callStack.push(messageEvent)
 
+                if (msg.res?._res?.constructor?.name === 'ServerResponse' && msg.req?.constructor?.name === 'IncomingMessage') {
+                    // this msg is a HTTP IncomingMessage object - strip out the circular references
+                    delete msg.req
+                    delete msg.res
+                    msg.res = `RES:${eventId}` // this is a special temporary value that will be cross-checked and the original value restored in returnLinkMessage
+                    msg.req = `REQ:${eventId}` // this is a special temporary value that will be cross-checked and the original value restored in returnLinkMessage
+                }
+
                 const options = {
                     properties: {
                         correlationData: eventId
@@ -876,6 +884,12 @@ module.exports = function (RED) {
                 }
                 const messageEvent = messageEvents[eventId]
                 if (messageEvent) {
+                    if (msg.res === `RES:${eventId}` && msg.req === `REQ:${eventId}`) {
+                        // this msg is a HTTP In msg & its req/res was temporarily detached for transmission over
+                        // the link - reattach the original req/res
+                        msg.req = messageEvent.msg.req
+                        msg.res = messageEvent.msg.res
+                    }
                     messageEvent.send(msg)
                     clearTimeout(messageEvent.timeout)
                     delete messageEvents[eventId]
