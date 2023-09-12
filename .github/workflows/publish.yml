@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    uses: 'flowforge/github-actions-workflows/.github/workflows/build_node_package.yml@main'
+    uses: 'flowforge/github-actions-workflows/.github/workflows/build_node_package.yml@e3e734b910af78371b2c9a1c6856446d17421f50'
 
   publish:
     needs: build
@@ -19,7 +19,7 @@ jobs:
       ( github.event_name == 'push' && github.ref == 'refs/heads/main' ) ||
       ( github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' ) ||
       github.event_name == 'schedule'
-    uses: 'flowforge/github-actions-workflows/.github/workflows/publish_node_package.yml@main'
+    uses: 'flowforge/github-actions-workflows/.github/workflows/publish_node_package.yml@e3e734b910af78371b2c9a1c6856446d17421f50'
     with:
       package_name: nr-project-nodes
       publish_package: true
