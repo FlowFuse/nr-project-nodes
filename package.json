@@ -1,7 +1,7 @@
 {
     "name": "@flowforge/nr-project-nodes",
     "version": "0.4.0",
-    "description": "A collection of Node-RED nodes for easy communication between Node-RED instances running in the FlowForge platform",
+    "description": "A collection of Node-RED nodes for easy communication between Node-RED instances running in the FlowFuse platform",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "lint": "eslint -c .eslintrc --ext js,html nodes/**/*.js",
@@ -9,14 +9,14 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/flowforge/flowforge-nr-project-nodes.git"
+        "url": "git+https://github.com/FlowFuse/nr-project-nodes.git"
     },
-    "author": "Flowforge Inc.",
+    "author": "FlowFuse Inc.",
     "license": "Apache-2.0",
     "bugs": {
-        "url": "https://github.com/flowforge/flowforge-nr-project-nodes/issues"
+        "url": "https://github.com/FlowFuse/nr-project-nodes/issues"
     },
-    "homepage": "https://github.com/flowforge/flowforge-nr-project-nodes#readme",
+    "homepage": "https://github.com/FlowFuse/nr-project-nodes#readme",
     "devDependencies": {
         "eslint": "^8.25.0",
         "eslint-config-standard": "^17.0.0",
