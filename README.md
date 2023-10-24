@@ -1,22 +1,22 @@
-# FlowForge Project Nodes
+# FlowFuse Project Nodes
 
 A collection of Node-RED nodes for easy communication between Node-RED instances
-running in the [FlowForge platform](https://flowforge.com).
+running in the [FlowFuse platform](https://flowfuse.com).
 
 These nodes act in a similar way to the core Node-RED Link nodes - but can be
 used to send and receive messages between different Node-RED instances.
 
 Whilst these nodes are published under the Apache-2.0 license, they can only be
-used with an instance of the FlowForge platform with an active EE license applied.
-If you try to install these nodes in an Non FlowForge EE platform you will see the following error in your Node-RED log:
-`Error: Project Link nodes cannot be loaded outside of flowforge EE environment`
+used with an instance of the FlowFuse platform with an active EE license applied.
+If you try to install these nodes in an Non FlowFuse EE platform you will see the following error in your Node-RED log:
+`Error: Project Link nodes cannot be loaded outside of FlowFuse EE environment`
 This can be safely ignored.
 
 ### Prerequisites
 
- - FlowForge 0.8+ running with an active EE license and its integrated MQTT Broker
+ - FlowFuse 0.8+ running with an active EE license and its integrated MQTT Broker
 
-Alternatively, you can [sign up to FlowForge Cloud](https://flowforge.com/product/)
+Alternatively, you can [sign up to FlowFuse Cloud](https://flowfuse.com/product/)
 now to try these nodes out.
 
 ### Nodes
