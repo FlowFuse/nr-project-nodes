@@ -3,7 +3,7 @@ module.exports = function (RED) {
 
     // Do not register nodes in runtime if settings not provided
     if (!RED.settings.flowforge || !RED.settings.flowforge.projectID || !RED.settings.flowforge.teamID || !RED.settings.flowforge.projectLink) {
-        throw new Error('Project Link nodes cannot be loaded outside of FlowForge EE environment')
+        throw new Error('Project Link nodes cannot be loaded outside of an FlowFuse EE environment')
     }
 
     // Imports
