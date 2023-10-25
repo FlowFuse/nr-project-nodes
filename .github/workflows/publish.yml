@@ -25,26 +25,6 @@ jobs:
     secrets:
       npm_registry_token: ${{ secrets.NPM_PUBLISH_TOKEN }}
 
-  dispatch:
-    name: Dispatch node-red container build
-    needs: publish
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate a token
-        id: generate_token
-        uses: tibdex/github-app-token@v1
-        with:
-          app_id: ${{ secrets.GH_BOT_APP_ID }}
-          private_key: ${{ secrets.GH_BOT_APP_KEY }}
-      - name: Trigger node-red container build
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          workflow: nodered-container.yml
-          repo: flowfuse/helm
-          ref: main
-          token: ${{ steps.generate_token.outputs.token }}
-          inputs: '{"nr_project_nodes_ref": "${{ github.ref }}", "nr_project_nodes_release_name": "${{ needs.publish.outputs.release_name }}"}'
-
   dispatch_nr_launcher:
     name: Dispatch nr-launcher package build
     needs: publish
