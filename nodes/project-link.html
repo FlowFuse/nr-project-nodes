@@ -73,7 +73,7 @@
         <label><span>&nbsp</span></label>
         <span class="ff-project-link-group-option">
             <input type="radio" id="ff-project-link-radio-input-broadcast" name="ff-project-link-broadcast" value="true" />
-            <label for="ff-project-link-radio-input-broadcast">Broadcast message to all instances</label>
+            <label for="ff-project-link-radio-input-broadcast">Broadcast message</label>
         </span>
     </div>
     <div class="form-row ff-project-link-topic-row">
@@ -219,7 +219,7 @@
                 // broadcast not permitted in link call at this time but has been
                 // considered in the code base - possible future iteration
                 if (nodeType === 'project link in') {
-                    el.append(new Option('all instances', 'all', false, val === 'all'))
+                    el.append(new Option('all instances and devices', 'all', false, val === 'all'))
                 }
                 const projects = (data.count ? data.projects : null) || []
                 for (let index = 0; index < projects.length; index++) {
@@ -366,7 +366,7 @@
 <script type="text/html" data-help-name="project link in">
     <p>Receive messages from other Node-RED instances within your FlowFuse Team</p>
     <h3>Details</h3>
-    <p>This node can either listen for messages broadcast by other instances,
+    <p>This node can either listen for messages broadcast by other instances and devices,
         or listen for messages sent directly to this instance.</p>
     <p>The node is configured with a <code>topic</code> to listen on. This works
        like an MQTT topic - allowing projects to send messages targeting different
@@ -404,12 +404,12 @@
         It provides three modes of operation:
         <ul>
             <li>send messages to another instance</li>
-            <li>broadcast messages to any instance listening on the same topic</li>
+            <li>broadcast messages to any instance or device listening on the same topic</li>
             <li>return the message to its sender if it originated from a Project Call node</li>
         </ul>
     </p>
     <p>
-        When configured to send or broadcast messages to other instances, the node
+        When configured to send or broadcast messages, the node
         is configured with a <code>topic</code> to send on. This works
         like an MQTT topic - allowing instances to send messages targeting different
         subscribers.

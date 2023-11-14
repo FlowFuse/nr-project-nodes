@@ -4,7 +4,7 @@ A collection of Node-RED nodes for easy communication between Node-RED instances
 running in the [FlowFuse platform](https://flowfuse.com).
 
 These nodes act in a similar way to the core Node-RED Link nodes - but can be
-used to send and receive messages between different Node-RED instances.
+used to send and receive messages between different Node-RED instances and devices.
 
 Whilst these nodes are published under the Apache-2.0 license, they can only be
 used with an instance of the FlowFuse platform with an active EE license applied.
@@ -15,6 +15,7 @@ This can be safely ignored.
 ### Prerequisites
 
  - FlowFuse 0.8+ running with an active EE license and its integrated MQTT Broker
+ - FlowFuse 1.14+ for communicating with application assigned devices
 
 Alternatively, you can [sign up to FlowFuse Cloud](https://flowfuse.com/product/)
 now to try these nodes out.
