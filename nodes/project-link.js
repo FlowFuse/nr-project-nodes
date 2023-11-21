@@ -17,7 +17,7 @@ module.exports = function (RED) {
     const TOPIC_HEADER = 'ff'
     const TOPIC_VERSION = 'v1'
     const OWNER_TYPE = RED.settings.flowforge.applicationID ? 'application' : 'instance'
-    const OWNER_ID = OWNER_TYPE === 'application' ? RED.settings.flowforge.applicationID : RED.settings.flowforge.projectID
+    const OWNER_ID = OWNER_TYPE === 'application' ? 'app:' + RED.settings.flowforge.applicationID : RED.settings.flowforge.projectID
 
     // #region JSDoc
 
@@ -167,13 +167,13 @@ module.exports = function (RED) {
                 topicParts.push(OWNER_ID)
                 topicParts.push('out')
                 // e.g. PUB topic ff/v1/7N152GxG2p/p/PROJECT-OWN-ID-aa97-8915e1897326/out/a/b
-                // e.g. PUB ff/v1/7N152GxG2p/p/DeviceId/out/a/b
+                // e.g. PUB ff/v1/7N152GxG2p/p/app:<app-id>/out/a/b
             } else {
                 // publish to a specific project
                 topicParts.push(projectOrAppID)
                 topicParts.push('in')
                 // e.g. PUB ff/v1/7N152GxG2p/p/TARGET-PROJ-ID-aa97-8915e1897326/in/a/b
-                // e.g. PUB ff/v1/7N152GxG2p/p/DeviceId/in/a/b
+                // e.g. PUB ff/v1/7N152GxG2p/p/app:<app-id>/in/a/b
             }
         }
         topicParts.push(subTopic)
@@ -409,6 +409,7 @@ module.exports = function (RED) {
                 subOptions.properties.userProperties = subOptions.properties.userProperties || {}
                 subOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID || ''
                 subOptions.properties.userProperties._applicationID = RED.settings.flowforge.applicationID || ''
+                subOptions.properties.userProperties._deviceID = RED.settings.flowforge.deviceID || ''
                 subOptions.properties.userProperties._nodeID = node.id
                 subOptions.properties.userProperties._ts = Date.now()
                 if (subID) {
@@ -746,7 +747,7 @@ module.exports = function (RED) {
                     if (msg.projectLink?.callStack?.length > 0) {
                         /** @type {MessageEvent} */
                         const messageEvent = msg.projectLink.callStack.pop()
-                        const targetId = messageEvent.project || messageEvent.application
+                        const targetId = messageEvent.project || `app:${messageEvent.application}`
                         if (messageEvent && targetId && messageEvent.topic && messageEvent.eventId) {
                             const responseTopic = buildLinkTopic(null, targetId, messageEvent.topic, node.broadcast, messageEvent.response || 'res')
                             const properties = {
@@ -844,10 +845,14 @@ module.exports = function (RED) {
                     eventId,
                     node: node.id,
                     project: RED.settings.flowforge.projectID,
+                    instance: RED.settings.flowforge.instanceID,
                     application: RED.settings.flowforge.applicationID,
                     topic: node.subTopic,
                     response: node.responseTopicPrefix,
                     ts: Date.now()
+                }
+                if (process.env.FF_DEVICE_ID) {
+                    messageEvent.device = process.env.FF_DEVICE_ID
                 }
                 /** @type {MessageEvents} */
                 messageEvents[eventId] = {
