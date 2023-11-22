@@ -1,3 +1,16 @@
+### 0.6.0
+
+ - Add support for communicating with app assigned devices (#55) @Steve-Mcl
+ - FIX: Remove node-red container rebuild dispatcher (#54) @ppawlowski
+
+### 0.5.0
+
+ - Pin reusable workflows to v0.1.0 (#53) @ppawlowski
+ - Update npm package name (#52) @knolleary
+ - Update ff references in package.json (#50) @knolleary
+ - Change repo references in workflows after github org rename (#49) @ppawlowski
+ - Publish nightly package to npmjs (#48) @ppawlowski
+
 ### 0.4.0
 
  - Fix `undefined (reading 'name')` error when `msg` is from a `http-in` node (#43) @Steve-Mcl
