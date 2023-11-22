@@ -136,7 +136,7 @@ module.exports = function (RED) {
 
     function buildLinkTopic (node, projectOrDeviceId, subTopic, broadcast, responseTopic) {
         // ↓ Useful for debugging ↓
-        console.log(`🔗 buildLinkTopic: for ${OWNER_TYPE} ${node?.ownId || ''} ${projectOrDeviceId} ${subTopic} ${broadcast} ${responseTopic}`)
+        // console.log(`🔗 buildLinkTopic: for ${OWNER_TYPE} ${node?.ownId || ''} ${projectOrDeviceId} ${subTopic} ${broadcast} ${responseTopic}`)
         const topicParts = [TOPIC_HEADER, TOPIC_VERSION, RED.settings.flowforge.teamID]
         if (!node || node.type === 'project link call') {
             topicParts.push('p')
@@ -180,7 +180,7 @@ module.exports = function (RED) {
         topicParts.push(subTopic)
         const topic = topicParts.join('/')
         // ↓ Useful for debugging ↓
-        console.log(`🔗 buildLinkTopic created topic: ${topic}`)
+        // console.log(`🔗 buildLinkTopic created topic: ${topic}`)
         return topic
     }
     // #endregion Helpers
@@ -709,7 +709,7 @@ module.exports = function (RED) {
             subscribedTopic = `$share/${RED.settings.flowforge.projectID}/${node.topic}`
         }
         // ↓ Useful for debugging ↓
-        console.log(`🔗 LINK-IN SUB ${subscribedTopic}`)
+        // console.log(`🔗 LINK-IN SUB ${subscribedTopic}`)
         mqtt.subscribe(node, subscribedTopic, { qos: 2 }, onSub)
             .then(_result => {})
             .catch(err => {
@@ -761,7 +761,7 @@ module.exports = function (RED) {
                                 correlationData: messageEvent.eventId
                             }
                             // ↓ Useful for debugging ↓
-                            console.log(`🔗 LINK-OUT RETURN PUB ${responseTopic}`)
+                            // console.log(`🔗 LINK-OUT RETURN PUB ${responseTopic}`)
                             await mqtt.publish(node, responseTopic, msg, { properties })
                         } else {
                             node.warn('Project Link Source not valid')
@@ -773,7 +773,7 @@ module.exports = function (RED) {
                 } else if (node.mode === 'link') {
                     const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast)
                     // ↓ Useful for debugging ↓
-                    console.log(`🔗 LINK-OUT PUB ${topic}`)
+                    // console.log(`🔗 LINK-OUT PUB ${topic}`)
                     await mqtt.publish(node, topic, msg)
                     done()
                 }
@@ -837,7 +837,7 @@ module.exports = function (RED) {
         mqtt.connect()
         mqtt.registerStatus(node)
         // ↓ Useful for debugging ↓
-        console.log(`🔗 LINK-CALL responseTopic SUB ${node.responseTopic}`)
+        // console.log(`🔗 LINK-CALL responseTopic SUB ${node.responseTopic}`)
         mqtt.subscribe(node, node.responseTopic, { qos: 2 }, onSub)
             .then(_result => {})
             .catch(err => {
@@ -896,7 +896,7 @@ module.exports = function (RED) {
                     }
                 }
                 // ↓ Useful for debugging ↓
-                console.log(`🔗 LINK-CALL PUB ${node.topic}`)
+                // console.log(`🔗 LINK-CALL PUB ${node.topic}`)
                 await mqtt.publish(node, node.topic, msg, options)
             } catch (error) {
                 done(error)
