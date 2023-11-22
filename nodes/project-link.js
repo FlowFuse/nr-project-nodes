@@ -17,7 +17,6 @@ module.exports = function (RED) {
     const TOPIC_HEADER = 'ff'
     const TOPIC_VERSION = 'v1'
     const OWNER_TYPE = RED.settings.flowforge.applicationID ? 'application' : 'instance'
-    const OWNER_ID = OWNER_TYPE === 'application' ? 'app:' + RED.settings.flowforge.applicationID : RED.settings.flowforge.projectID
 
     // #region JSDoc
 
@@ -135,11 +134,13 @@ module.exports = function (RED) {
         return result
     }
 
-    function buildLinkTopic (node, projectOrAppID, subTopic, broadcast, responseTopic) {
+    function buildLinkTopic (node, projectOrDeviceId, subTopic, broadcast, responseTopic) {
+        // ↓ Useful for debugging ↓
+        console.log(`🔗 buildLinkTopic: for ${OWNER_TYPE} ${node?.ownId || ''} ${projectOrDeviceId} ${subTopic} ${broadcast} ${responseTopic}`)
         const topicParts = [TOPIC_HEADER, TOPIC_VERSION, RED.settings.flowforge.teamID]
         if (!node || node.type === 'project link call') {
             topicParts.push('p')
-            topicParts.push(projectOrAppID)
+            topicParts.push(projectOrDeviceId)
             if (responseTopic) {
                 topicParts.push(responseTopic)
             } else {
@@ -147,16 +148,16 @@ module.exports = function (RED) {
             }
         } else if (node.type === 'project link in') {
             topicParts.push('p')
-            if (broadcast && projectOrAppID === 'all') { // Listen for broadcast messages from all projects
+            if (broadcast && projectOrDeviceId === 'all') { // Listen for broadcast messages from all projects
                 topicParts.push('+')
                 topicParts.push('out')
                 // e.g. SUB ff/v1/7N152GxG2p/p/+/out/a/b
             } else if (broadcast) { // Listen for broadcast messages from a specific project
-                topicParts.push(projectOrAppID)
+                topicParts.push(projectOrDeviceId)
                 topicParts.push('out')
                 // e.g. SUB ff/v1/7N152GxG2p/p/SOURCE-PROJ-ID-aa97-8915e1897326/out/a/b
             } else { // Receive messages sent to this instance
-                topicParts.push(OWNER_ID)
+                topicParts.push(node.ownId)
                 topicParts.push('in')
                 // e.g. SUB ff/v1/7N152GxG2p/p/PROJECT-OWN-ID-aa97-8915e1897326/in/a/b
             }
@@ -164,20 +165,22 @@ module.exports = function (RED) {
             topicParts.push('p')
             if (broadcast) {
                 // publish to all (broadcast)
-                topicParts.push(OWNER_ID)
+                topicParts.push(node.ownId)
                 topicParts.push('out')
                 // e.g. PUB topic ff/v1/7N152GxG2p/p/PROJECT-OWN-ID-aa97-8915e1897326/out/a/b
-                // e.g. PUB ff/v1/7N152GxG2p/p/app:<app-id>/out/a/b
+                // e.g. PUB ff/v1/7N152GxG2p/p/dev:<device-id>/out/a/b
             } else {
                 // publish to a specific project
-                topicParts.push(projectOrAppID)
+                topicParts.push(projectOrDeviceId)
                 topicParts.push('in')
                 // e.g. PUB ff/v1/7N152GxG2p/p/TARGET-PROJ-ID-aa97-8915e1897326/in/a/b
-                // e.g. PUB ff/v1/7N152GxG2p/p/app:<app-id>/in/a/b
+                // e.g. PUB ff/v1/7N152GxG2p/p/dev:<device-id>/in/a/b
             }
         }
         topicParts.push(subTopic)
         const topic = topicParts.join('/')
+        // ↓ Useful for debugging ↓
+        console.log(`🔗 buildLinkTopic created topic: ${topic}`)
         return topic
     }
     // #endregion Helpers
@@ -244,8 +247,8 @@ module.exports = function (RED) {
                 }
                 if (packet.properties?.userProperties?._deviceId) {
                     msg.projectLink.deviceId = packet.properties?.userProperties?._deviceId
-                    msg.projectLink.deviceName = packet.properties?.userProperties?._deviceName
-                    msg.projectLink.deviceType = packet.properties?.userProperties?._deviceType
+                    msg.projectLink.deviceName = packet.properties?.userProperties?._deviceName || ''
+                    msg.projectLink.deviceType = packet.properties?.userProperties?._deviceType || ''
                 }
             } catch (error) {
                 err = error
@@ -409,7 +412,9 @@ module.exports = function (RED) {
                 subOptions.properties.userProperties = subOptions.properties.userProperties || {}
                 subOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID || ''
                 subOptions.properties.userProperties._applicationID = RED.settings.flowforge.applicationID || ''
-                subOptions.properties.userProperties._deviceID = RED.settings.flowforge.deviceID || ''
+                if (OWNER_TYPE === 'application') {
+                    subOptions.properties.userProperties._deviceID = process.env.FF_DEVICE_ID || ''
+                }
                 subOptions.properties.userProperties._nodeID = node.id
                 subOptions.properties.userProperties._ts = Date.now()
                 if (subID) {
@@ -482,8 +487,8 @@ module.exports = function (RED) {
                 pubOptions.properties.userProperties._applicationID = RED.settings.flowforge.applicationID || ''
                 if (process.env.FF_DEVICE_ID) {
                     pubOptions.properties.userProperties._deviceId = process.env.FF_DEVICE_ID
-                    pubOptions.properties.userProperties._deviceName = process.env.FF_DEVICE_NAME
-                    pubOptions.properties.userProperties._deviceType = process.env.FF_DEVICE_TYPE
+                    pubOptions.properties.userProperties._deviceName = process.env.FF_DEVICE_NAME || ''
+                    pubOptions.properties.userProperties._deviceType = process.env.FF_DEVICE_TYPE || ''
                 }
                 pubOptions.properties.userProperties._nodeID = node.id
                 pubOptions.properties.userProperties._publishTime = Date.now()
@@ -670,6 +675,7 @@ module.exports = function (RED) {
     function ProjectLinkInNode (n) {
         RED.nodes.createNode(this, n)
         const node = this
+        node.ownId = OWNER_TYPE === 'application' ? 'dev:' + process.env.FF_DEVICE_ID : RED.settings.flowforge.projectID
         node.project = n.project
         node.subscriptionIdentifier = (n.broadcast && n.project === 'all') ? 2 : 1
         node.subTopic = n.topic
@@ -703,7 +709,7 @@ module.exports = function (RED) {
             subscribedTopic = `$share/${RED.settings.flowforge.projectID}/${node.topic}`
         }
         // ↓ Useful for debugging ↓
-        // console.log(`🔗 LINK-IN SUB ${subscribedTopic}`)
+        console.log(`🔗 LINK-IN SUB ${subscribedTopic}`)
         mqtt.subscribe(node, subscribedTopic, { qos: 2 }, onSub)
             .then(_result => {})
             .catch(err => {
@@ -735,6 +741,7 @@ module.exports = function (RED) {
     function ProjectLinkOutNode (n) {
         RED.nodes.createNode(this, n)
         const node = this
+        node.ownId = OWNER_TYPE === 'application' ? 'dev:' + process.env.FF_DEVICE_ID : RED.settings.flowforge.projectID
         node.project = n.project
         node.subTopic = n.topic
         node.mode = n.mode || 'link'
@@ -747,14 +754,14 @@ module.exports = function (RED) {
                     if (msg.projectLink?.callStack?.length > 0) {
                         /** @type {MessageEvent} */
                         const messageEvent = msg.projectLink.callStack.pop()
-                        const targetId = messageEvent.project || `app:${messageEvent.application}`
+                        const targetId = messageEvent.project || `dev:${messageEvent.device}`
                         if (messageEvent && targetId && messageEvent.topic && messageEvent.eventId) {
                             const responseTopic = buildLinkTopic(null, targetId, messageEvent.topic, node.broadcast, messageEvent.response || 'res')
                             const properties = {
                                 correlationData: messageEvent.eventId
                             }
                             // ↓ Useful for debugging ↓
-                            // console.log(`🔗 LINK-OUT RETURN PUB ${responseTopic}`)
+                            console.log(`🔗 LINK-OUT RETURN PUB ${responseTopic}`)
                             await mqtt.publish(node, responseTopic, msg, { properties })
                         } else {
                             node.warn('Project Link Source not valid')
@@ -766,7 +773,7 @@ module.exports = function (RED) {
                 } else if (node.mode === 'link') {
                     const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast)
                     // ↓ Useful for debugging ↓
-                    // console.log(`🔗 LINK-OUT PUB ${topic}`)
+                    console.log(`🔗 LINK-OUT PUB ${topic}`)
                     await mqtt.publish(node, topic, msg)
                     done()
                 }
@@ -792,6 +799,7 @@ module.exports = function (RED) {
     function ProjectLinkCallNode (n) {
         RED.nodes.createNode(this, n)
         const node = this
+        node.ownId = OWNER_TYPE === 'application' ? 'dev:' + process.env.FF_DEVICE_ID : RED.settings.flowforge.projectID
         node.project = n.project
         node.subTopic = n.topic
         node.topic = buildLinkTopic(node, node.project, node.subTopic, false)
@@ -800,7 +808,7 @@ module.exports = function (RED) {
         } else {
             node.responseTopicPrefix = 'res'
         }
-        node.responseTopic = buildLinkTopic(node, OWNER_ID, node.subTopic, false, node.responseTopicPrefix)
+        node.responseTopic = buildLinkTopic(node, node.ownId, node.subTopic, false, node.responseTopicPrefix)
         // node.responseTopic = buildLinkTopic(node, RED.settings.flowforge.projectID, node.subTopic, false, node.responseTopicPrefix)
         let timeout = parseFloat(n.timeout || '30') * 1000
         if (isNaN(timeout)) {
@@ -829,7 +837,7 @@ module.exports = function (RED) {
         mqtt.connect()
         mqtt.registerStatus(node)
         // ↓ Useful for debugging ↓
-        // console.log(`🔗 LINK-CALL responseTopic SUB ${node.responseTopic}`)
+        console.log(`🔗 LINK-CALL responseTopic SUB ${node.responseTopic}`)
         mqtt.subscribe(node, node.responseTopic, { qos: 2 }, onSub)
             .then(_result => {})
             .catch(err => {
@@ -888,7 +896,7 @@ module.exports = function (RED) {
                     }
                 }
                 // ↓ Useful for debugging ↓
-                // console.log(`🔗 LINK-CALL PUB ${node.topic}`)
+                console.log(`🔗 LINK-CALL PUB ${node.topic}`)
                 await mqtt.publish(node, node.topic, msg, options)
             } catch (error) {
                 done(error)
