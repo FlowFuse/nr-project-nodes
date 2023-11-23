@@ -1,6 +1,6 @@
 {
     "name": "@flowfuse/nr-project-nodes",
-    "version": "0.6.0",
+    "version": "0.6.1",
     "description": "A collection of Node-RED nodes for easy communication between Node-RED instances running in the FlowFuse platform",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",

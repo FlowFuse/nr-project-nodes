@@ -1,3 +1,7 @@
+### 0.6.1
+
+ - Disable direct message option for application owned devices (#59) @Steve-Mcl
+ 
 ### 0.6.0
 
  - Add support for communicating with app assigned devices (#55) @Steve-Mcl
