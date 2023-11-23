@@ -681,8 +681,16 @@ module.exports = function (RED) {
         node.subTopic = n.topic
         node.broadcast = n.broadcast === true || n.broadcast === 'true'
         node.topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast)
-        mqtt.connect()
-        mqtt.registerStatus(node)
+
+        let configOk = true
+        if (node.broadcast !== true && OWNER_TYPE === 'application') {
+            configOk = false
+            node.status({ fill: 'red', shape: 'dot', text: 'unsupported source option' })
+            node.warn('Receiving direct messages is not supported for application assigned devices. Please update the nodes source option to use "Listen for broadcast messages".')
+        } else {
+            mqtt.connect()
+            mqtt.registerStatus(node)
+        }
 
         /** @type {MQTT.OnMessageCallback} */
         const onSub = function (err, topic, msg, _packet) {
@@ -710,17 +718,19 @@ module.exports = function (RED) {
         }
         // ↓ Useful for debugging ↓
         // console.log(`🔗 LINK-IN SUB ${subscribedTopic}`)
-        mqtt.subscribe(node, subscribedTopic, { qos: 2 }, onSub)
-            .then(_result => {})
-            .catch(err => {
-                node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
-                node.error(err)
-            })
+        if (configOk) {
+            mqtt.subscribe(node, subscribedTopic, { qos: 2 }, onSub)
+                .then(_result => {})
+                .catch(err => {
+                    node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
+                    node.error(err)
+                })
 
-        this.on('input', function (msg, send, done) {
-            send(msg)
-            done()
-        })
+            this.on('input', function (msg, send, done) {
+                send(msg)
+                done()
+            })
+        }
         node.on('close', function (done) {
             mqtt.unsubscribe(node, subscribedTopic, onSub)
                 .then(() => {})
@@ -735,7 +745,14 @@ module.exports = function (RED) {
                 })
         })
     }
-    RED.nodes.registerType('project link in', ProjectLinkInNode)
+    RED.nodes.registerType('project link in', ProjectLinkInNode, {
+        settings: {
+            projectLinkInNode_ownerType: {
+                value: OWNER_TYPE,
+                exportable: true
+            }
+        }
+    })
 
     // Project Link Out Node
     function ProjectLinkOutNode (n) {

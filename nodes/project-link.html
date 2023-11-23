@@ -165,6 +165,23 @@
                 $('.ff-project-link-list-row').show()
                 $('#node-input-projectList').prop('disabled', isBroadcast ? true : null)
             } else if (node.type === 'project link in') {
+                // NOTE: Application assigned devices do not support direct messaging, therefore
+                // don't permit "Receive messages sent to this instance" on the project-in node
+                // when settings.RED.settings.ownerType is "application"
+                console.log('RED.settings.ProjectLinkInNode_ownerType', RED.settings.projectLinkInNode_ownerType)
+                debugger
+                const directOptionParent = $('#ff-project-link-radio-input-direct').parent()
+                if (RED.settings.projectLinkInNode_ownerType === 'application') {
+                    // update the label to reflect the fact that direct messaging is not supported
+                    directOptionParent.children('label').text('Receive messages sent to this device (not supported)')
+                    directOptionParent.children().prop('disabled', true)
+                    directOptionParent.children().addClass('disabled')
+                    isBroadcast = true
+                } else {
+                    directOptionParent.children('label').text('Receive messages sent to this instance')
+                    directOptionParent.children().removeClass('disabled')
+                    directOptionParent.children().prop('disabled', false)
+                }
                 $('.ff-project-link-topic-row').show()
                 $('.ff-project-link-list-row').show()
                 $('#node-input-projectList').prop('disabled', isBroadcast ? null : true)
