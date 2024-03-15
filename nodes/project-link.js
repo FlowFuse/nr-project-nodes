@@ -16,7 +16,10 @@ module.exports = function (RED) {
     const API_VERSION = 'v1'
     const TOPIC_HEADER = 'ff'
     const TOPIC_VERSION = 'v1'
-    const OWNER_TYPE = RED.settings.flowforge.applicationID ? 'application' : 'instance'
+    // It is not unreasonable to expect `projectID` and `applicationID` are set for an instance
+    // owned device, however an application owned device should not have a projectID.
+    // therefore, assume project owned if `projectID` is set
+    const OWNER_TYPE = RED.settings.flowforge.projectID ? 'instance' : 'application'
 
     // #region JSDoc
 
