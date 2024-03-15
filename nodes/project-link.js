@@ -17,6 +17,7 @@ module.exports = function (RED) {
     const TOPIC_HEADER = 'ff'
     const TOPIC_VERSION = 'v1'
     const OWNER_TYPE = RED.settings.flowforge.applicationID ? 'application' : 'instance'
+    const featureEnabled = RED.settings.flowforge.projectLink.featureEnabled !== false
 
     // #region JSDoc
 
@@ -683,7 +684,11 @@ module.exports = function (RED) {
         node.topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast)
 
         let configOk = true
-        if (node.broadcast !== true && OWNER_TYPE === 'application') {
+        if (featureEnabled === false) {
+            configOk = false
+            node.status({ fill: 'red', shape: 'dot', text: 'feature not available' })
+            node.warn('Project Link feature is not available for your current Team.')
+        } else if (node.broadcast !== true && OWNER_TYPE === 'application') {
             configOk = false
             node.status({ fill: 'red', shape: 'dot', text: 'unsupported source option' })
             node.warn('Receiving direct messages is not supported for application assigned devices. Please update the nodes source option to use "Listen for broadcast messages".')
@@ -763,9 +768,18 @@ module.exports = function (RED) {
         node.subTopic = n.topic
         node.mode = n.mode || 'link'
         node.broadcast = n.broadcast === true || n.broadcast === 'true'
-        mqtt.connect()
-        mqtt.registerStatus(node)
+        if (featureEnabled === false) {
+            node.status({ fill: 'red', shape: 'dot', text: 'feature not available' })
+            node.warn('Project Link feature is not available for your current Team.')
+        } else {
+            mqtt.connect()
+            mqtt.registerStatus(node)
+        }
         node.on('input', async function (msg, _send, done) {
+            if (featureEnabled === false) {
+                done()
+                return
+            }
             try {
                 if (node.mode === 'return') {
                     if (msg.projectLink?.callStack?.length > 0) {
@@ -850,20 +864,28 @@ module.exports = function (RED) {
                 node.returnLinkMessage(eventId, msg)
             }
         }
-
-        mqtt.connect()
-        mqtt.registerStatus(node)
-        // ↓ Useful for debugging ↓
-        // console.log(`🔗 LINK-CALL responseTopic SUB ${node.responseTopic}`)
-        mqtt.subscribe(node, node.responseTopic, { qos: 2 }, onSub)
-            .then(_result => {})
-            .catch(err => {
-                node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
-                node.error(err)
-            })
+        if (featureEnabled === false) {
+            node.status({ fill: 'red', shape: 'dot', text: 'feature not available' })
+            node.warn('Project Link feature is not available for your current Team.')
+        } else {
+            mqtt.connect()
+            mqtt.registerStatus(node)
+            // ↓ Useful for debugging ↓
+            // console.log(`🔗 LINK-CALL responseTopic SUB ${node.responseTopic}`)
+            mqtt.subscribe(node, node.responseTopic, { qos: 2 }, onSub)
+                .then(_result => {})
+                .catch(err => {
+                    node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
+                    node.error(err)
+                })
+        }
 
         node.on('input', async function (msg, send, done) {
             try {
+                if (featureEnabled === false) {
+                    done()
+                    return
+                }
                 const eventId = crypto.randomBytes(14).toString('hex')
                 /** @type {MessageEvent} */
                 const messageEvent = {
