@@ -1,3 +1,10 @@
+### 0.6.2
+
+ - Fix Project Nodes multiple MQTT connections issue (#66) @Steve-Mcl
+ - Display "feature not available" if feature flag is false (#63) @Steve-Mcl
+ - Better determination of device owner (#65) @Steve-Mcl
+ - Update npm-publish action version to v2 (#61) @ppawlowski
+
 ### 0.6.1
 
  - Disable direct message option for application owned devices (#59) @Steve-Mcl
