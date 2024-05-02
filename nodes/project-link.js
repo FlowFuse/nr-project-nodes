@@ -580,8 +580,13 @@ module.exports = function (RED) {
                     /** @type {MQTT.IClientOptions} */
                     const defaultOptions = {
                         protocolVersion: 5,
+                        clean: false,
                         reconnectPeriod: RED.settings.mqttReconnectTime || 5000,
                         properties: {
+                            // Allow the broker to keep the session alive for 2 minutes after
+                            // a disconnect. This ensures short-connectivity blips do not lead to
+                            // inbound message loss.
+                            sessionExpiryInterval: 120,
                             requestResponseInformation: true,
                             requestProblemInformation: true,
                             userProperties: {
