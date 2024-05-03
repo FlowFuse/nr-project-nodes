@@ -1,3 +1,7 @@
+### 0.6.3
+
+ - Add a 2 minute session expiry on the mqtt connection (#69) @knolleary
+
 ### 0.6.2
 
  - Fix Project Nodes multiple MQTT connections issue (#66) @Steve-Mcl
