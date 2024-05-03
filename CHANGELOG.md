@@ -1,3 +1,7 @@
+### 0.6.4
+
+ - Add 'node-red' keyword (#71) @knolleary
+
 ### 0.6.3
 
  - Add a 2 minute session expiry on the mqtt connection (#69) @knolleary
