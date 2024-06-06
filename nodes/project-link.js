@@ -8,9 +8,11 @@ module.exports = function (RED) {
 
     // Imports
     const crypto = require('crypto')
-    const got = require('got')
+    const { default: GOT } = require('got')
     const MQTT = require('mqtt')
     const urlModule = require('url')
+    const { HttpProxyAgent } = require('http-proxy-agent')
+    const { HttpsProxyAgent } = require('https-proxy-agent')
 
     // Constants
     const API_VERSION = 'v1'
@@ -631,6 +633,17 @@ module.exports = function (RED) {
                     const parsedURL = urlModule.parse(brokerURL)
                     const newURL = new URL(brokerURL)
                     parsedURL.hostname = newURL.hostname
+                    if (process.env.http_proxy || process.env.https_proxy) {
+                        // wsOptions.agent is expected to be an agent so we determine which type to set
+                        //  (http/https) based on the target connection protocol.
+                        if (newURL.protocol === 'wss:') {
+                            const agent = new HttpsProxyAgent(process.env.https_proxy)
+                            options.wsOptions = { agent }
+                        } else {
+                            const agent = new HttpProxyAgent(process.env.http_proxy)
+                            options.wsOptions = { agent }
+                        }
+                    }
                     client = MQTT.connect(parsedURL, options)
                     clients.push(client) // add to clients array for containment and auto cleanup of multiple clients
                     on('connect', onConnect)
@@ -1055,6 +1068,16 @@ module.exports = function (RED) {
         }
     }
     RED.nodes.registerType('project link call', ProjectLinkCallNode)
+
+    const httpProxy = process.env.http_proxy ? new HttpProxyAgent(process.env.http_proxy) : undefined
+    const httpsProxy = process.env.https_proxy ? new HttpsProxyAgent(process.env.https_proxy) : undefined
+
+    const got = GOT.extend({
+        agent: {
+            http: httpProxy,
+            https: httpsProxy
+        }
+    })
 
     // Endpoint for querying list of projects in node UI
     RED.httpAdmin.get('/nr-project-link/projects', RED.auth.needsPermission('flows.write'), async function (_req, res) {
