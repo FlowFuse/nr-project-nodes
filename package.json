@@ -33,6 +33,7 @@
     },
     "dependencies": {
         "got": "^11.8.6",
-        "mqtt": "^4.3.7"
+        "mqtt": "^4.3.7",
+        "proxy-agent": "^6.4.0"
     }
 }
