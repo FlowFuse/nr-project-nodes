@@ -34,6 +34,7 @@
     "dependencies": {
         "got": "^11.8.6",
         "mqtt": "^4.3.7",
-        "proxy-agent": "^6.4.0"
+        "http-proxy-agent": "^7.0.2",
+        "https-proxy-agent": "^7.0.4"
     }
 }
