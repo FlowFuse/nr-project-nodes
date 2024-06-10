@@ -11,8 +11,7 @@ module.exports = function (RED) {
     const { default: GOT } = require('got')
     const MQTT = require('mqtt')
     const urlModule = require('url')
-    const { HttpProxyAgent } = require('http-proxy-agent')
-    const { HttpsProxyAgent } = require('https-proxy-agent')
+    const utils = require('../lib/utils.js')
 
     // Constants
     const API_VERSION = 'v1'
@@ -635,17 +634,9 @@ module.exports = function (RED) {
                     parsedURL.hostname = newURL.hostname
 
                     // wsOptions.agent is expected to be an HTTP or HTTPS agent based on the request protocol
-                    // http/ws requests use env var http_proxy and the HttpProxyAgent
-                    // https/wss requests use env var https_proxy and the HttpsProxyAgent
-                    // REF: https://github.com/TooTallNate/proxy-agents/tree/main/packages/proxy-agent#maps-proxy-protocols-to-httpagent-implementations
-                    if (newURL.protocol === 'ws:' && process.env.http_proxy) {
+                    if (process.env.http_proxy || process.env.https_proxy) {
                         options.wsOptions = {
-                            agent: new HttpProxyAgent(process.env.http_proxy)
-                        }
-                    }
-                    if (newURL.protocol === 'wss:' && process.env.https_proxy) {
-                        options.wsOptions = {
-                            agent: new HttpsProxyAgent(process.env.https_proxy)
+                            agent: utils.getWSProxyAgent(brokerURL)
                         }
                     }
 
@@ -1074,14 +1065,8 @@ module.exports = function (RED) {
     }
     RED.nodes.registerType('project link call', ProjectLinkCallNode)
 
-    const httpProxy = process.env.http_proxy ? new HttpProxyAgent(process.env.http_proxy) : undefined
-    const httpsProxy = process.env.https_proxy ? new HttpsProxyAgent(process.env.https_proxy) : undefined
-
     const got = GOT.extend({
-        agent: {
-            http: httpProxy,
-            https: httpsProxy
-        }
+        agent: utils.getHTTPProxyAgent()
     })
 
     // Endpoint for querying list of projects in node UI

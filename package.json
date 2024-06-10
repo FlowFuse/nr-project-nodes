@@ -3,9 +3,9 @@
     "version": "0.6.4",
     "description": "A collection of Node-RED nodes for easy communication between Node-RED instances running in the FlowFuse platform",
     "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1",
-        "lint": "eslint -c .eslintrc --ext js,html nodes/**/*.js",
-        "lint:fix": "eslint -c .eslintrc --ext js,html nodes/**/*.js --fix"
+        "test": "mocha test/unit/**/*_spec.js --timeout 5000",
+        "lint": "eslint -c .eslintrc --ext js,html nodes/**/*.js test/**/*.js",
+        "lint:fix": "eslint -c .eslintrc --ext js,html nodes/**/*.js test/**/*.js --fix"
     },
     "repository": {
         "type": "git",
@@ -20,7 +20,13 @@
     "devDependencies": {
         "eslint": "^8.25.0",
         "eslint-config-standard": "^17.0.0",
-        "eslint-plugin-html": "7.1.0"
+        "eslint-plugin-html": "7.1.0",
+        "eslint-plugin-no-only-tests": "^3.1.0",
+        "mocha": "^10.4.0",
+        "mocha-cli": "^1.0.1",
+        "node-red": "^3.1.9",
+        "node-red-node-test-helper": "^0.3.4",
+        "sinon": "^18.0.0"
     },
     "keywords": [ "node-red" ],
     "node-red": {
