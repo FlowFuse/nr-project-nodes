@@ -633,17 +633,22 @@ module.exports = function (RED) {
                     const parsedURL = urlModule.parse(brokerURL)
                     const newURL = new URL(brokerURL)
                     parsedURL.hostname = newURL.hostname
-                    if (process.env.http_proxy || process.env.https_proxy) {
-                        // wsOptions.agent is expected to be an agent so we determine which type to set
-                        //  (http/https) based on the target connection protocol.
-                        if (newURL.protocol === 'wss:') {
-                            const agent = new HttpsProxyAgent(process.env.https_proxy)
-                            options.wsOptions = { agent }
-                        } else {
-                            const agent = new HttpProxyAgent(process.env.http_proxy)
-                            options.wsOptions = { agent }
+
+                    // wsOptions.agent is expected to be an HTTP or HTTPS agent based on the request protocol
+                    // http/ws requests use env var http_proxy and the HttpProxyAgent
+                    // https/wss requests use env var https_proxy and the HttpsProxyAgent
+                    // REF: https://github.com/TooTallNate/proxy-agents/tree/main/packages/proxy-agent#maps-proxy-protocols-to-httpagent-implementations
+                    if (newURL.protocol === 'ws:' && process.env.http_proxy) {
+                        options.wsOptions = {
+                            agent: new HttpProxyAgent(process.env.http_proxy)
                         }
                     }
+                    if (newURL.protocol === 'wss:' && process.env.https_proxy) {
+                        options.wsOptions = {
+                            agent: new HttpsProxyAgent(process.env.https_proxy)
+                        }
+                    }
+
                     client = MQTT.connect(parsedURL, options)
                     clients.push(client) // add to clients array for containment and auto cleanup of multiple clients
                     on('connect', onConnect)
