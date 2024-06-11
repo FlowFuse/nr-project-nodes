@@ -1066,7 +1066,7 @@ module.exports = function (RED) {
     RED.nodes.registerType('project link call', ProjectLinkCallNode)
 
     const got = GOT.extend({
-        agent: utils.getHTTPProxyAgent()
+        agent: utils.getHTTPProxyAgent(RED.settings.flowforge.forgeURL, { timeout: 4000 })
     })
 
     // Endpoint for querying list of projects in node UI
