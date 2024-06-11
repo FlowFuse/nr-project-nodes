@@ -4,8 +4,8 @@
     "description": "A collection of Node-RED nodes for easy communication between Node-RED instances running in the FlowFuse platform",
     "scripts": {
         "test": "mocha test/unit/**/*_spec.js --timeout 5000",
-        "lint": "eslint -c .eslintrc --ext js,html nodes/**/*.js test/**/*.js",
-        "lint:fix": "eslint -c .eslintrc --ext js,html nodes/**/*.js test/**/*.js --fix"
+        "lint": "eslint -c .eslintrc --ext js,html nodes/**/*.js  lib/**/*.js test/**/*.js",
+        "lint:fix": "eslint -c .eslintrc --ext js,html nodes/**/*.js  lib/**/*.js test/**/*.js --fix"
     },
     "repository": {
         "type": "git",
@@ -28,7 +28,9 @@
         "node-red-node-test-helper": "^0.3.4",
         "sinon": "^18.0.0"
     },
-    "keywords": [ "node-red" ],
+    "keywords": [
+        "node-red"
+    ],
     "node-red": {
         "nodes": {
             "project-link": "nodes/project-link.js"
@@ -39,8 +41,9 @@
     },
     "dependencies": {
         "got": "^11.8.6",
-        "mqtt": "^4.3.7",
         "http-proxy-agent": "^7.0.2",
-        "https-proxy-agent": "^7.0.4"
+        "https-proxy-agent": "^7.0.4",
+        "mqtt": "^4.3.7",
+        "proxy-from-env": "^1.1.0"
     }
 }
