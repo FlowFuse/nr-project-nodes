@@ -11,7 +11,10 @@ on:
 
 jobs:
   build:
-    uses: 'flowfuse/github-actions-workflows/.github/workflows/build_node_package.yml@v0.1.0'
+    uses: 'flowfuse/github-actions-workflows/.github/workflows/build_node_package.yml@feat-build-node-multiple-node-versions'
+    with:
+      run_tests: true
+      # node_version: '["14", "16", "18", "20"]'
 
   publish:
     needs: build
