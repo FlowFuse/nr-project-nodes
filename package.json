@@ -3,7 +3,7 @@
     "version": "0.6.4",
     "description": "A collection of Node-RED nodes for easy communication between Node-RED instances running in the FlowFuse platform",
     "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1",
+        "test": "exit 0",
         "lint": "eslint -c .eslintrc --ext js,html nodes/**/*.js",
         "lint:fix": "eslint -c .eslintrc --ext js,html nodes/**/*.js --fix"
     },
