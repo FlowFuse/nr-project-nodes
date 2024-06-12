@@ -634,7 +634,7 @@ module.exports = function (RED) {
                     parsedURL.hostname = newURL.hostname
 
                     // wsOptions.agent is expected to be an HTTP or HTTPS agent based on the request protocol
-                    if (process.env.http_proxy || process.env.https_proxy) {
+                    if (process.env.all_proxy || process.env.http_proxy || process.env.https_proxy) {
                         options.wsOptions = {
                             agent: utils.getWSProxyAgent(brokerURL)
                         }
