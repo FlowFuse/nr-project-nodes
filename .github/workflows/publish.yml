@@ -14,8 +14,8 @@ jobs:
     with:
       # run_tests: true
       node: '[
-              {"version": "14", "test": true, "lint": false},
-              {"version": "18", "test": true, "lint": true}
+              {"version": "14", "tests": true, "lint": false},
+              {"version": "18", "tests": true, "lint": true}
               ]'
       # node_version: '[14, 16, 18, 20]'
 
