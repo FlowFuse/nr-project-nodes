@@ -14,6 +14,10 @@ jobs:
     uses: 'flowfuse/github-actions-workflows/.github/workflows/build_node_package.yml@feat-build-node-multiple-node-versions'
     with:
       run_tests: true
+      # node: '[
+      #         {"version": "14", "test": true, "lint": false},
+      #         {"version": "18", "test": true, "lint": true}
+      #         ]'
       # node_version: '[14, 16, 18, 20]'
 
   publish:
