@@ -15,7 +15,7 @@ describe('project-link node', function () {
     })
 
     describe('proxy', function () {
-        function setup (httpProxy, httpsProxy, noProxy, forgeUrl, mqttUrl) {
+        function setup (httpProxy, httpsProxy, allProxy, noProxy, forgeUrl, mqttUrl) {
             const mqttConnectStub = sinon.stub(MQTT, 'connect').returns({
                 on: sinon.fake(),
                 subscribe: sinon.fake(),
@@ -26,6 +26,7 @@ describe('project-link node', function () {
             })
             process.env.http_proxy = httpProxy || ''
             process.env.https_proxy = httpsProxy || ''
+            process.env.all_proxy = allProxy || ''
             process.env.no_proxy = noProxy || ''
             const nodes = {}
             const RED = {
@@ -92,7 +93,7 @@ describe('project-link node', function () {
                 spy.returned({}).should.be.true()
             })
             it('should not add proxy to GOT instance if no_proxy is configured to include forge domain', function () {
-                const env = setup('http://proxy:3128', null, 'testfuse.com', 'https://testfuse.com', 'wss://testfuse.com')
+                const env = setup('http://proxy:3128', null, null, 'testfuse.com', 'https://testfuse.com', 'wss://testfuse.com')
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -100,7 +101,7 @@ describe('project-link node', function () {
                 spy.returned({}).should.be.true()
             })
             it('should not add proxy to GOT instance for http request if http_proxy is unset', function () {
-                const env = setup(null, 'http://localhost:3128', '127.0.0.1,google.com', 'http://testfuse.com', 'ws://testfuse.com')
+                const env = setup(null, 'http://localhost:3128', null, '127.0.0.1,google.com', 'http://testfuse.com', 'ws://testfuse.com')
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -108,7 +109,7 @@ describe('project-link node', function () {
                 spy.returned({}).should.be.true()
             })
             it('should not add proxy to GOT instance for https request if https_proxy is unset', function () {
-                const env = setup('http://localhost:3128', null, '127.0.0.1,google.com', 'https://testfuse.com', 'wss://testfuse.com')
+                const env = setup('http://localhost:3128', null, null, '127.0.0.1,google.com', 'https://testfuse.com', 'wss://testfuse.com')
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -116,7 +117,7 @@ describe('project-link node', function () {
                 spy.returned({}).should.be.true()
             })
             it('should add http proxy to GOT instance if env vars are set', function () {
-                const env = setup('http://localhost:3128', null, null, 'http://testfuse.com', 'ws://testfuse.com')
+                const env = setup('http://localhost:3128', null, null, null, 'http://testfuse.com', 'ws://testfuse.com')
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -126,7 +127,27 @@ describe('project-link node', function () {
                 getHTTPProxyAgentReturnValue.should.not.have.property('https')
             })
             it('should add https proxy to GOT instance if env vars are set', function () {
-                const env = setup(null, 'http://localhost:3128', null, 'https://testfuse.com', 'wss://testfuse.com')
+                const env = setup(null, 'http://localhost:3128', null, null, 'https://testfuse.com', 'wss://testfuse.com')
+                const RED = env.RED
+                const spy = sinon.spy(utils, 'getHTTPProxyAgent')
+                projectLinkPackage(RED)
+                spy.calledOnce.should.be.true()
+                const getHTTPProxyAgentReturnValue = spy.returnValues[0]
+                getHTTPProxyAgentReturnValue.should.have.property('https').and.be.an.instanceOf(HttpsProxyAgent)
+                getHTTPProxyAgentReturnValue.should.not.have.property('http')
+            })
+            it('should add http proxy to GOT instance if all_proxy is set', function () {
+                const env = setup(null, null, 'http://localhost:3128', null, 'http://testfuse.com', 'ws://testfuse.com')
+                const RED = env.RED
+                const spy = sinon.spy(utils, 'getHTTPProxyAgent')
+                projectLinkPackage(RED)
+                spy.calledOnce.should.be.true()
+                const getHTTPProxyAgentReturnValue = spy.returnValues[0]
+                getHTTPProxyAgentReturnValue.should.have.property('http').and.be.an.instanceOf(HttpProxyAgent)
+                getHTTPProxyAgentReturnValue.should.not.have.property('https')
+            })
+            it('should add https proxy to GOT instance if all_proxy is set', function () {
+                const env = setup(null, null, 'http://localhost:3128', null, 'https://testfuse.com', 'wss://testfuse.com')
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -151,7 +172,7 @@ describe('project-link node', function () {
                 spy.calledOnce.should.be.false()
             })
             it('should not add proxy to MQTT if no_proxy includes target domain', function () {
-                const env = setup('http://localhost:3128', null, '127.0.0.1,testfuse.com,other-domain,.parent-domain.io', 'https://testfuse.com', 'ws://testfuse.com')
+                const env = setup('http://localhost:3128', null, null, '127.0.0.1,testfuse.com,other-domain,.parent-domain.io', 'https://testfuse.com', 'ws://testfuse.com')
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getWSProxyAgent')
                 projectLinkPackage(RED)
@@ -182,7 +203,41 @@ describe('project-link node', function () {
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpProxyAgent)
             })
             it('should add https proxy to MQTT if env vars are set', function () {
-                const env = setup(null, 'http://localhost:3128', null, null, 'wss://localhost:1883')
+                const env = setup(null, 'http://localhost:3128', null, null, null, 'wss://localhost:1883')
+                const RED = env.RED
+                const spy = sinon.spy(utils, 'getWSProxyAgent')
+                projectLinkPackage(RED)
+                const NodeConstructor = env.nodes['project link in'].NodeConstructor
+                // creating any of the nodes will cause MQTT to attempt connection and thus call getWSProxyAgent (if it's going to be called)
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test' })
+                spy.calledOnce.should.be.true()
+                const getWSProxyAgentReturnValue = spy.returnValues[0]
+                getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpsProxyAgent)
+
+                env.mqttConnectStub.calledOnce.should.be.true()
+                const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+                mqttConnectOptions.should.have.property('wsOptions').and.be.an.Object()
+                mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpsProxyAgent)
+            })
+            it('should add http proxy to MQTT if all_proxy is set', function () {
+                const env = setup(null, null, 'http://localhost:3128')
+                const RED = env.RED
+                const spy = sinon.spy(utils, 'getWSProxyAgent')
+                projectLinkPackage(RED)
+                const NodeConstructor = env.nodes['project link in'].NodeConstructor
+                // creating any of the nodes will cause MQTT to attempt connection and thus call getWSProxyAgent (if it's going to be called)
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test' })
+                spy.calledOnce.should.be.true()
+                const getWSProxyAgentReturnValue = spy.returnValues[0]
+                getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpProxyAgent)
+
+                env.mqttConnectStub.calledOnce.should.be.true()
+                const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+                mqttConnectOptions.should.have.property('wsOptions').and.be.an.Object()
+                mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpProxyAgent)
+            })
+            it('should add https proxy to MQTT if all_proxy is set', function () {
+                const env = setup(null, null, 'http://localhost:3128', null, null, 'wss://localhost:1883')
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getWSProxyAgent')
                 projectLinkPackage(RED)
