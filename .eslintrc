@@ -9,11 +9,13 @@
     "extends": [
         "standard"
     ],
+    "plugins": [ "eslint-plugin-html", "no-only-tests" ],
     "parserOptions": {
         "ecmaVersion": 12
     },
     "rules": {
         "indent": ["error", 4],
-        "object-shorthand": ["error"]
+        "object-shorthand": ["error"],
+        "no-only-tests/no-only-tests": "error"
     }
 }

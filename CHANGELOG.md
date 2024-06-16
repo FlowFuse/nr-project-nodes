@@ -1,3 +1,10 @@
+### 0.7.0
+ - Proxy support (#81) @Steve-Mcl
+ - Update build.yml to run tests and other node versions (#83) @Steve-Mcl
+ - Bump actions/setup-node from 1 to 4 (#79) @dependabot
+ - Bump actions/checkout from 1 to 4 (#75) @dependabot
+ - Enable dependabot for github actions (#73) @ppawlowski
+
 ### 0.6.4
 
  - Add 'node-red' keyword (#71) @knolleary

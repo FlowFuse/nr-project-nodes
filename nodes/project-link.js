@@ -8,9 +8,10 @@ module.exports = function (RED) {
 
     // Imports
     const crypto = require('crypto')
-    const got = require('got')
+    const { default: GOT } = require('got')
     const MQTT = require('mqtt')
     const urlModule = require('url')
+    const utils = require('../lib/utils.js')
 
     // Constants
     const API_VERSION = 'v1'
@@ -631,6 +632,14 @@ module.exports = function (RED) {
                     const parsedURL = urlModule.parse(brokerURL)
                     const newURL = new URL(brokerURL)
                     parsedURL.hostname = newURL.hostname
+
+                    // wsOptions.agent is expected to be an HTTP or HTTPS agent based on the request protocol
+                    if (process.env.all_proxy || process.env.http_proxy || process.env.https_proxy) {
+                        options.wsOptions = {
+                            agent: utils.getWSProxyAgent(brokerURL)
+                        }
+                    }
+
                     client = MQTT.connect(parsedURL, options)
                     clients.push(client) // add to clients array for containment and auto cleanup of multiple clients
                     on('connect', onConnect)
@@ -1055,6 +1064,10 @@ module.exports = function (RED) {
         }
     }
     RED.nodes.registerType('project link call', ProjectLinkCallNode)
+
+    const got = GOT.extend({
+        agent: utils.getHTTPProxyAgent(RED.settings.flowforge.forgeURL, { timeout: 4000 })
+    })
 
     // Endpoint for querying list of projects in node UI
     RED.httpAdmin.get('/nr-project-link/projects', RED.auth.needsPermission('flows.write'), async function (_req, res) {
