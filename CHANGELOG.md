@@ -1,3 +1,9 @@
+### 0.7.1
+ - Bump tibdex/github-app-token from 1 to 2 (#77) @dependabot
+ - Update release-publish.yml to NodeJS v18 (#88) @hardillb
+ - Bump ws and node-red (#87) @dependabot
+ - Bump JS-DevTools/npm-publish from 2 to 3 (#76) @dependabot
+
 ### 0.7.0
  - Proxy support (#81) @Steve-Mcl
  - Update build.yml to run tests and other node versions (#83) @Steve-Mcl
