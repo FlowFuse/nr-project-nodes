@@ -1,3 +1,8 @@
+### 0.7.3
+
+ - Ensure all pub/sub MQTT operations use QoS 2 (#99) @Steve-Mcl
+ - Bump flowfuse/github-actions-workflows from 0.1.0 to 0.28.0 (#97) @dependabot
+
 ### 0.7.2
 
  - Bump axios from 1.7.2 to 1.7.4 (#93) @dependabot
