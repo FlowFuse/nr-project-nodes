@@ -451,7 +451,7 @@ module.exports = function (RED) {
                 }
                 /** @type {MQTT.IClientSubscribeOptions} */
                 const subOptions = Object.assign({}, options)
-                subOptions.qos = subOptions.qos == null ? 1 : subOptions.qos
+                subOptions.qos = subOptions.qos == null ? 2 : subOptions.qos
                 subOptions.properties = Object.assign({}, options.properties)
                 subOptions.properties.userProperties = subOptions.properties.userProperties || {}
                 subOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID || ''
@@ -524,7 +524,7 @@ module.exports = function (RED) {
                 }
                 /** @type {MQTT.IClientPublishOptions} */
                 const pubOptions = Object.assign({}, options)
-                pubOptions.qos = pubOptions.qos == null ? 1 : pubOptions.qos
+                pubOptions.qos = pubOptions.qos == null ? 2 : pubOptions.qos
                 pubOptions.properties = Object.assign({}, options.properties)
                 pubOptions.properties.userProperties = pubOptions.properties.userProperties || {}
                 pubOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID || ''
