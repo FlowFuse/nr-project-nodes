@@ -266,119 +266,119 @@ describe('project-link node', function () {
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpsProxyAgent)
             })
         })
-        describe('Nodes', function () {
-            it('project link in should subscribe using QoS 2', function () {
-                const env = setup()
-                const inNode = {
-                    on: sinon.fake(),
-                    type: 'project link in'
-                }
-                const topic = 'cloud/project-nodes-test/xxx'
-                const RED = env.RED
-                projectLinkPackage(RED)
-                const NodeConstructor = env.nodes['project link in'].NodeConstructor
-                NodeConstructor.call(inNode, { topic, project: PROJECT_ID })
+    })
+    describe('Nodes', function () {
+        it('project link in should subscribe using QoS 2', function () {
+            const env = setup()
+            const inNode = {
+                on: sinon.fake(),
+                type: 'project link in'
+            }
+            const topic = 'cloud/project-nodes-test/xxx'
+            const RED = env.RED
+            projectLinkPackage(RED)
+            const NodeConstructor = env.nodes['project link in'].NodeConstructor
+            NodeConstructor.call(inNode, { topic, project: PROJECT_ID })
 
-                env.mqttStub.subscribe.calledOnce.should.be.true()
-                should(env.mqttStub.subscribe.args[0][0]).equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`)
-                const options = env.mqttStub.subscribe.args[0][1]
-                should(options).be.an.Object()
-                options.should.have.property('qos').and.equal(2)
-                options.should.have.property('properties').and.be.an.Object()
-                options.properties.should.have.property('subscriptionIdentifier').and.be.a.Number()
-            })
-            it('project link call should publish and subscribe using QoS 2', async function () {
-                const env = setup()
-                const RED = env.RED
-                const nodeEvents = {}
-                const callNode = {
-                    on: (event, cb) => {
-                        nodeEvents[event] = cb
-                    },
-                    error: sinon.fake(),
-                    type: 'project link call'
-                }
-                const topic = 'cloud/project-nodes-test/call'
-                const expectedPubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`
-                const expectedSubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/${topic}`
-                projectLinkPackage(RED)
-                const NodeConstructor = env.nodes['project link call'].NodeConstructor
-                NodeConstructor.call(callNode, { topic, project: PROJECT_ID })
-                callNode.should.have.property('topic', expectedPubTopic)
-                callNode.should.have.property('responseTopic', expectedSubTopic)
-                env.mqttStub.subscribe.calledOnce.should.be.true()
-                should(env.mqttStub.subscribe.args[0][0]).equal(expectedSubTopic)
-                const options = env.mqttStub.subscribe.args[0][1]
-                should(options).be.an.Object()
-                options.should.have.property('qos').and.equal(2)
+            env.mqttStub.subscribe.calledOnce.should.be.true()
+            should(env.mqttStub.subscribe.args[0][0]).equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`)
+            const options = env.mqttStub.subscribe.args[0][1]
+            should(options).be.an.Object()
+            options.should.have.property('qos').and.equal(2)
+            options.should.have.property('properties').and.be.an.Object()
+            options.properties.should.have.property('subscriptionIdentifier').and.be.a.Number()
+        })
+        it('project link call should publish and subscribe using QoS 2', async function () {
+            const env = setup()
+            const RED = env.RED
+            const nodeEvents = {}
+            const callNode = {
+                on: (event, cb) => {
+                    nodeEvents[event] = cb
+                },
+                error: sinon.fake(),
+                type: 'project link call'
+            }
+            const topic = 'cloud/project-nodes-test/call'
+            const expectedPubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`
+            const expectedSubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/${topic}`
+            projectLinkPackage(RED)
+            const NodeConstructor = env.nodes['project link call'].NodeConstructor
+            NodeConstructor.call(callNode, { topic, project: PROJECT_ID })
+            callNode.should.have.property('topic', expectedPubTopic)
+            callNode.should.have.property('responseTopic', expectedSubTopic)
+            env.mqttStub.subscribe.calledOnce.should.be.true()
+            should(env.mqttStub.subscribe.args[0][0]).equal(expectedSubTopic)
+            const options = env.mqttStub.subscribe.args[0][1]
+            should(options).be.an.Object()
+            options.should.have.property('qos').and.equal(2)
 
-                // send a message to the node so that it can publish
-                await nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
+            // send a message to the node so that it can publish
+            await nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
 
-                // ensure qos 2 on the publish
-                env.mqttStub.publish.calledOnce.should.be.true()
-                const pubTopic = env.mqttStub.publish.args[0][0]
-                should(pubTopic).equal(expectedPubTopic)
-                const pubMessageStr = env.mqttStub.publish.args[0][1]
-                const pubMessage = JSON.parse(pubMessageStr)
-                should(pubMessage).be.an.Object()
-                pubMessage.should.have.property('payload').and.equal('test')
-                pubMessage.should.have.property('projectLink').and.be.an.Object()
-                pubMessage.projectLink.should.have.property('callStack').and.be.an.Array()
-                pubMessage.projectLink.callStack.should.have.length(1)
-                pubMessage.projectLink.callStack[0].should.have.property('topic').and.equal(topic)
-                pubMessage.projectLink.callStack[0].should.have.property('ts').and.be.a.Number()
-                pubMessage.projectLink.callStack[0].should.have.property('response').and.equal('res')
-                pubMessage.projectLink.callStack[0].should.have.property('application')
-                pubMessage.projectLink.callStack[0].should.have.property('instance')
-                pubMessage.projectLink.callStack[0].should.have.property('node')
-                pubMessage.projectLink.callStack[0].should.have.property('project').and.equal(PROJECT_ID)
-                pubMessage.projectLink.callStack[0].should.have.property('eventId').and.be.a.String()
+            // ensure qos 2 on the publish
+            env.mqttStub.publish.calledOnce.should.be.true()
+            const pubTopic = env.mqttStub.publish.args[0][0]
+            should(pubTopic).equal(expectedPubTopic)
+            const pubMessageStr = env.mqttStub.publish.args[0][1]
+            const pubMessage = JSON.parse(pubMessageStr)
+            should(pubMessage).be.an.Object()
+            pubMessage.should.have.property('payload').and.equal('test')
+            pubMessage.should.have.property('projectLink').and.be.an.Object()
+            pubMessage.projectLink.should.have.property('callStack').and.be.an.Array()
+            pubMessage.projectLink.callStack.should.have.length(1)
+            pubMessage.projectLink.callStack[0].should.have.property('topic').and.equal(topic)
+            pubMessage.projectLink.callStack[0].should.have.property('ts').and.be.a.Number()
+            pubMessage.projectLink.callStack[0].should.have.property('response').and.equal('res')
+            pubMessage.projectLink.callStack[0].should.have.property('application')
+            pubMessage.projectLink.callStack[0].should.have.property('instance')
+            pubMessage.projectLink.callStack[0].should.have.property('node')
+            pubMessage.projectLink.callStack[0].should.have.property('project').and.equal(PROJECT_ID)
+            pubMessage.projectLink.callStack[0].should.have.property('eventId').and.be.a.String()
 
-                const pubOptions = env.mqttStub.publish.args[0][2]
-                should(pubOptions).be.an.Object()
-                pubOptions.should.have.property('qos').and.equal(2)
-            })
-            it('project link out should publish using QoS 2', async function () {
-                const env = setup()
-                const RED = env.RED
-                const nodeEvents = {}
-                const outNode = {
-                    on: (event, cb) => {
-                        nodeEvents[event] = cb
-                    },
-                    error: sinon.fake(),
-                    type: 'project link call',
-                    mode: 'link'
-                }
-                const topic = 'cloud/project-nodes-test/xxx'
-                const expectedPubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`
-                projectLinkPackage(RED)
-                const NodeConstructor = env.nodes['project link out'].NodeConstructor
-                NodeConstructor.call(outNode, { topic, project: PROJECT_ID })
-                outNode.should.have.property('subTopic', topic)
+            const pubOptions = env.mqttStub.publish.args[0][2]
+            should(pubOptions).be.an.Object()
+            pubOptions.should.have.property('qos').and.equal(2)
+        })
+        it('project link out should publish using QoS 2', async function () {
+            const env = setup()
+            const RED = env.RED
+            const nodeEvents = {}
+            const outNode = {
+                on: (event, cb) => {
+                    nodeEvents[event] = cb
+                },
+                error: sinon.fake(),
+                type: 'project link call',
+                mode: 'link'
+            }
+            const topic = 'cloud/project-nodes-test/xxx'
+            const expectedPubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`
+            projectLinkPackage(RED)
+            const NodeConstructor = env.nodes['project link out'].NodeConstructor
+            NodeConstructor.call(outNode, { topic, project: PROJECT_ID })
+            outNode.should.have.property('subTopic', topic)
 
-                // send a message to the node so that it can publish
-                await nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
+            // send a message to the node so that it can publish
+            await nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
 
-                env.mqttStub.publish.calledOnce.should.be.true()
-                const pubTopic = env.mqttStub.publish.args[0][0]
-                should(pubTopic).equal(expectedPubTopic)
-                const pubMessageStr = env.mqttStub.publish.args[0][1]
-                const pubMessage = JSON.parse(pubMessageStr)
-                should(pubMessage).be.an.Object()
-                pubMessage.should.have.property('payload').and.equal('test')
-                const pubOptions = env.mqttStub.publish.args[0][2]
-                should(pubOptions).be.an.Object()
-                pubOptions.should.have.property('qos').and.equal(2)
-                pubOptions.should.have.property('properties').and.be.an.Object()
-                pubOptions.properties.should.have.property('contentType', 'application/json')
-                pubOptions.properties.should.have.property('userProperties').and.be.an.Object()
-                pubOptions.properties.userProperties.should.have.property('_nodeID')
-                pubOptions.properties.userProperties.should.have.property('_projectID', PROJECT_ID)
-                pubOptions.properties.userProperties.should.have.property('_applicationID')
-                pubOptions.properties.userProperties.should.have.property('_publishTime').and.be.a.Number()
-            })
+            env.mqttStub.publish.calledOnce.should.be.true()
+            const pubTopic = env.mqttStub.publish.args[0][0]
+            should(pubTopic).equal(expectedPubTopic)
+            const pubMessageStr = env.mqttStub.publish.args[0][1]
+            const pubMessage = JSON.parse(pubMessageStr)
+            should(pubMessage).be.an.Object()
+            pubMessage.should.have.property('payload').and.equal('test')
+            const pubOptions = env.mqttStub.publish.args[0][2]
+            should(pubOptions).be.an.Object()
+            pubOptions.should.have.property('qos').and.equal(2)
+            pubOptions.should.have.property('properties').and.be.an.Object()
+            pubOptions.properties.should.have.property('contentType', 'application/json')
+            pubOptions.properties.should.have.property('userProperties').and.be.an.Object()
+            pubOptions.properties.userProperties.should.have.property('_nodeID')
+            pubOptions.properties.userProperties.should.have.property('_projectID', PROJECT_ID)
+            pubOptions.properties.userProperties.should.have.property('_applicationID')
+            pubOptions.properties.userProperties.should.have.property('_publishTime').and.be.a.Number()
         })
     })
 })
