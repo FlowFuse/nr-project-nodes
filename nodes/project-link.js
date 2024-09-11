@@ -582,7 +582,7 @@ module.exports = function (RED) {
                     const defaultOptions = {
                         protocolVersion: 5,
                         clean: false,
-                        reconnectPeriod: RED.settings.mqttReconnectTime || 5000,
+                        reconnectPeriod: RED.settings.mqttReconnectTime || crypto.randomInt(3000, 7000),
                         properties: {
                             // Allow the broker to keep the session alive for 2 minutes after
                             // a disconnect. This ensures short-connectivity blips do not lead to
