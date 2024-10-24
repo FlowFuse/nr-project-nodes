@@ -1,3 +1,13 @@
+### 0.7.4
+
+ - Bump flowfuse/github-actions-workflows from 0.34.0 to 0.36.0 (#111) @dependabot
+ - Bump cookie, node-red and express (#110) @dependabot
+ - Bump flowfuse/github-actions-workflows from 0.30.0 to 0.34.0 (#109) @dependabot
+ - Bump flowfuse/github-actions-workflows from 0.29.0 to 0.30.0 (#107) @dependabot
+ - Bump express and node-red (#106) @dependabot
+ - Randomise reconnect period (#104) @Steve-Mcl
+ - Bump flowfuse/github-actions-workflows from 0.28.0 to 0.29.0 (#105) @dependabot
+
 ### 0.7.3
 
  - Ensure all pub/sub MQTT operations use QoS 2 (#99) @Steve-Mcl
