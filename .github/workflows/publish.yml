@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    uses: 'flowfuse/github-actions-workflows/.github/workflows/build_node_package.yml@v0.38.0'
+    uses: 'flowfuse/github-actions-workflows/.github/workflows/build_node_package.yml@v0.39.0'
     with:
       node: '[
               {"version": "14", "tests": true, "lint": false},
@@ -25,7 +25,7 @@ jobs:
     if: |
       ( github.event_name == 'push' && github.ref == 'refs/heads/main' ) ||
       ( github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' )
-    uses: 'flowfuse/github-actions-workflows/.github/workflows/publish_node_package.yml@v0.38.0'
+    uses: 'flowfuse/github-actions-workflows/.github/workflows/publish_node_package.yml@v0.39.0'
     with:
       package_name: nr-project-nodes
       publish_package: true
@@ -39,12 +39,12 @@ jobs:
     steps:
       - name: Generate a token
         id: generate_token
-        uses: tibdex/github-app-token@v2
+        uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a # v2.1.0
         with:
           app_id: ${{ secrets.GH_BOT_APP_ID }}
           private_key: ${{ secrets.GH_BOT_APP_KEY }}
       - name: Trigger nr-launcher package build
-        uses: benc-uk/workflow-dispatch@v1
+        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
         with:
           workflow: publish.yml
           repo: flowfuse/nr-launcher
