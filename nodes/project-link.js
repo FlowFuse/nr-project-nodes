@@ -17,6 +17,7 @@ module.exports = function (RED) {
     const API_VERSION = 'v1'
     const TOPIC_HEADER = 'ff'
     const TOPIC_VERSION = 'v1'
+    const DEFAULT_PROJECT_CACHE_AGE = 30 * 1000 // 30 seconds
     // It is not unreasonable to expect `projectID` and `applicationID` are set for an instance
     // owned device, however an application owned device should not have a projectID.
     // therefore, assume project owned if `projectID` is set
@@ -43,6 +44,18 @@ module.exports = function (RED) {
     // #endregion JSDoc
 
     // #region Helpers
+
+    const got = GOT.extend({
+        agent: utils.getHTTPProxyAgent(RED.settings.flowforge.forgeURL, { timeout: 4000 })
+    })
+
+    const projects = require('../lib/projects.js').projects(got, {
+        forgeURL: RED.settings.flowforge.forgeURL,
+        teamID: RED.settings.flowforge.teamID,
+        token: RED.settings.flowforge.projectLink.token,
+        API_VERSION,
+        DEFAULT_PROJECT_CACHE_AGE
+    })
 
     /**
      * Opinionated test to check topic is valid for subscription...
@@ -1065,27 +1078,13 @@ module.exports = function (RED) {
     }
     RED.nodes.registerType('project link call', ProjectLinkCallNode)
 
-    const got = GOT.extend({
-        agent: utils.getHTTPProxyAgent(RED.settings.flowforge.forgeURL, { timeout: 4000 })
-    })
-
     // Endpoint for querying list of projects in node UI
     RED.httpAdmin.get('/nr-project-link/projects', RED.auth.needsPermission('flows.write'), async function (_req, res) {
-        const url = `${RED.settings.flowforge.forgeURL}/api/${API_VERSION}/teams/${RED.settings.flowforge.teamID}/projects`
         try {
-            const data = await got.get(url, {
-                headers: {
-                    Authorization: `Bearer ${RED.settings.flowforge.projectLink.token}`
-                },
-                timeout: {
-                    request: 4000
-                }
-            }).json()
-            if (data != null) {
-                res.json(data)
-            } else {
-                res.sendStatus(404)
-            }
+            const list = await projects.getProjects(0) // get fresh list of projects
+            // ↓ Useful for debugging ↓
+            // console.log(`🔗 LINK-PROJECTS LIST ${list.count} projects`)
+            res.json(list)
         } catch (err) {
             res.sendStatus(500)
         }
