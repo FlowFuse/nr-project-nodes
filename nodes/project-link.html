@@ -12,6 +12,9 @@
         width: 250px;
         display: inline-block;
     }
+    #dialog-form select > option.ff-project-link-bad-option {
+        color: var(--red-ui-text-color-error, red);
+    }
 </style>
 
 <script type="text/html" data-template-name="project link in">
@@ -127,6 +130,22 @@
         return /^(?:(?:[^/$+#\b\f\n\r\t\v\0]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0]+?))*)$/.test(subTopic)
     }
 
+    function isValidProject (projectId) {
+        // this is a simple check to see if the selected option has class ff-project-link-bad-option
+        const projectList = $('#node-input-projectList')
+        if (projectId === 'all') {
+            return true // broadcast to all is a valid option
+        }
+        if (!projectList || !projectList.length) {
+            return true // assume valid
+        }
+        // if it is disabled, ignore the check
+        if (projectList.prop('disabled')) {
+            return true
+        }
+        return !projectList.find('.ff-project-link-bad-option').is(':selected')
+    }
+
     function onEditPrepare (node, targetType) {
         let isBroadcast = node.broadcast === true
         let isReturnMode = node.mode === 'return'
@@ -152,6 +171,12 @@
                 updateUI()
             })
         }
+
+        // watch for target project selection change
+        $('#node-input-projectList').on('change', function (e) {
+            console.debug('Project link project selection changed', e.target.value)
+            updateUI()
+        })
 
         updateUI()
 
@@ -184,6 +209,15 @@
                 $('.ff-project-link-topic-row').show()
                 $('.ff-project-link-list-row').show()
                 $('#node-input-projectList').prop('disabled', null)
+            }
+
+            if ($('#node-input-projectList').prop('disabled')) {
+                // if the project list is disabled, we cannot select a bad option
+                $('#node-input-projectList').removeClass('input-error')
+            } else if ($('#node-input-projectList').length) {
+                // if the project list is enabled, we can select a bad option
+                const badEntryIsSelected = $('#node-input-projectList').find('.ff-project-link-bad-option').is(':selected')
+                $('#node-input-projectList').toggleClass('input-error', badEntryIsSelected)
             }
         }
     }
@@ -228,12 +262,21 @@
         })
             .done(function (data) {
                 el.empty()
+
+                const projects = (data.count ? data.projects : null) || []
+                const matched = (nodeType === 'project link in' && val === 'all') || projects.some(item => item.id === val || item.name === val)
+                if (!matched) {
+                    // if the value is not in the list, add it as an option
+                    el.append($('<option>', { class: 'ff-project-link-bad-option', value: val, text: val }))
+                    el.addClass('input-error')
+                }
+
                 // broadcast not permitted in link call at this time but has been
                 // considered in the code base - possible future iteration
                 if (nodeType === 'project link in') {
                     el.append(new Option('all instances and devices', 'all', false, val === 'all'))
                 }
-                const projects = (data.count ? data.projects : null) || []
+
                 for (let index = 0; index < projects.length; index++) {
                     const item = projects[index]
                     el.append(new Option(item.name, item.id, false, item.id === val))
@@ -258,7 +301,19 @@
         color: '#87D8CF',
         defaults: {
             name: { value: '_DEFAULT_' },
-            project: { value: '', required: true },
+            project: {
+                value: '',
+                validate: function (v) {
+                    if (this.broadcast === 'false' || this.broadcast === false) {
+                        return true // don't need to validate project id if we are only receiving messages sent to this instance
+                    }
+                    if (v === 'all') {
+                        return true // if we are listening for broadcast messages from all, we don't need a project id
+                    }
+                    // otherwise, we need a valid project id
+                    return v && isValidProject(v)
+                }
+            },
             broadcast: { value: false, required: true },
             topic: { value: '', required: true, validate: isValidSubscriptionTopic }
         },
@@ -292,7 +347,16 @@
             name: { value: '_DEFAULT_' },
             mode: { value: 'link' }, // link || return
             broadcast: { value: false, required: true },
-            project: { value: '', required: true },
+            project: {
+                value: '',
+                validate: function (v) {
+                    if (this.broadcast === 'true' || this.broadcast === true) {
+                        return true // don't need to validate project id if we are broadcasting to all
+                    }
+                    // otherwise, we need a valid project id
+                    return v && isValidProject(v)
+                }
+            },
             topic: {
                 value: '',
                 validate: function (v) {
@@ -344,7 +408,7 @@
         color: '#87D8CF',
         defaults: {
             name: { value: '' },
-            project: { value: '', required: true },
+            project: { value: '', required: true, validate: isValidProject },
             topic: { value: '', required: true, validate: isValidPublishTopic },
             timeout: {
                 value: '30',
