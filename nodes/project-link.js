@@ -811,12 +811,28 @@ module.exports = function (RED) {
         // ↓ Useful for debugging ↓
         // console.log(`🔗 LINK-IN SUB ${subscribedTopic}`)
         if (configOk) {
-            mqtt.subscribe(node, subscribedTopic, { qos: 2 }, onSub)
-                .then(_result => {})
-                .catch(err => {
+            async function setupSubscription () {
+                try {
+                    // check the project exists in the platform when broadcasting messages to a specific project
+                    if (node.broadcast === true && node.project !== 'all') {
+                        const data = await projects.getProjects()
+                        const projectExists = data.projects && data.projects.some(p => p.id === node.project)
+                        if (!projectExists) {
+                            mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
+                            node.status({ fill: 'red', shape: 'dot', text: 'invalid target' })
+                            node.warn(`Selected target '${node.project}' not found in FlowFuse`)
+                            return
+                        }
+                    }
+                    await mqtt.subscribe(node, subscribedTopic, { qos: 2 }, onSub)
+                } catch (err) {
+                    mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
                     node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
                     node.error(err)
-                })
+                }
+            }
+
+            setupSubscription()
 
             this.on('input', function (msg, send, done) {
                 send(msg)
@@ -862,6 +878,24 @@ module.exports = function (RED) {
             mqtt.connect()
             mqtt.registerStatus(node)
         }
+
+        // When the out node is set to link mode and is targeting a specific project,
+        // we should check the target exists in the platform
+        if (node.mode === 'link' && node.broadcast === false) {
+            projects.getProjects()
+                .then(data => {
+                    // Check if the current project exists in the projects list
+                    const projectExists = data.projects && data.projects.some(p => p.id === node.project)
+                    if (!projectExists) {
+                        throw new Error(`Selected target '${node.project}' not found in FlowFuse`)
+                    }
+                }).catch(err => {
+                    mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
+                    node.status({ fill: 'red', shape: 'dot', text: 'invalid target' })
+                    node.warn(err.message)
+                })
+        }
+
         node.on('input', async function (msg, _send, done) {
             if (featureEnabled === false) {
                 done()
@@ -921,6 +955,7 @@ module.exports = function (RED) {
         node.project = n.project
         node.subTopic = n.topic
         node.topic = buildLinkTopic(node, node.project, node.subTopic, false)
+
         if (RED.settings.flowforge.useSharedSubscriptions) {
             node.responseTopicPrefix = `res-${crypto.randomBytes(4).toString('hex')}`
         } else {
@@ -959,9 +994,21 @@ module.exports = function (RED) {
             mqtt.registerStatus(node)
             // ↓ Useful for debugging ↓
             // console.log(`🔗 LINK-CALL responseTopic SUB ${node.responseTopic}`)
-            mqtt.subscribe(node, node.responseTopic, { qos: 2 }, onSub)
+            projects.getProjects()
+                .then(data => {
+                    // Check if the current project exists in the projects list
+                    const projectExists = data.projects && data.projects.some(p => p.id === node.project)
+                    if (!projectExists) {
+                        mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
+                        node.status({ fill: 'red', shape: 'dot', text: 'invalid target' })
+                        node.warn(`Selected target '${node.project}' not found in FlowFuse`)
+                        return
+                    }
+                    return mqtt.subscribe(node, node.responseTopic, { qos: 2 }, onSub)
+                })
                 .then(_result => {})
                 .catch(err => {
+                    mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
                     node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
                     node.error(err)
                 })
