@@ -4,8 +4,8 @@
     "description": "A collection of Node-RED nodes for easy communication between Node-RED instances running in the FlowFuse platform",
     "scripts": {
         "test": "mocha test/unit/**/*_spec.js --timeout 5000",
-        "lint": "eslint -c .eslintrc --ext js,html \"nodes/**/*.js\"  \"lib/**/*.js\" \"test/**/*.js\"",
-        "lint:fix": "eslint -c .eslintrc --ext js,html \"nodes/**/*.js\"  \"lib/**/*.js\" \"test/**/*.js\" --fix"
+        "lint": "eslint -c .eslintrc --ext js,html \"{nodes/**/*.{js,html},lib/**/*.js,test/**/*.js}\"",
+        "lint:fix": "eslint -c .eslintrc --ext js,html \"{nodes/**/*.{js,html},lib/**/*.js,test/**/*.js}\" --fix"
     },
     "repository": {
         "type": "git",

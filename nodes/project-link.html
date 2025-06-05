@@ -103,7 +103,7 @@
 </script>
 
 <script type="text/javascript">
-/* global RED */
+/* global RED, $ */
 (function () {
     /**
      * Test a topic string is valid for subscription...
@@ -172,7 +172,7 @@
                 if (RED.settings.projectLinkInNode_ownerType === 'application') {
                     // update the label to reflect the fact that direct messaging is not supported
                     directOptionParent.children('label').text('Receive messages sent to this device')
-                    RED.popover.tooltip(directOptionParent.children(), 'Option not supported when a device is assigned to an application');
+                    RED.popover.tooltip(directOptionParent.children(), 'Option not supported when a device is assigned to an application')
                     directOptionParent.children().prop('disabled', true)
                     directOptionParent.children().addClass('disabled')
                     isBroadcast = true
