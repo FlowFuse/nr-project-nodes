@@ -3,6 +3,7 @@ const mocha = require('mocha') // eslint-disable-line no-unused-vars
 const sinon = require('sinon')
 const utils = require('../../../lib/utils.js')
 const MQTT = require('mqtt')
+const projects = require('../../../lib/projects')
 const projectLinkPackage = require('../../../nodes/project-link.js')
 const { HttpProxyAgent } = require('http-proxy-agent')
 const { HttpsProxyAgent } = require('https-proxy-agent')
@@ -299,6 +300,10 @@ describe('project-link node', function () {
                 error: sinon.fake(),
                 type: 'project link call'
             }
+            projects.projects = sinon.stub().returns({
+                getProjects: sinon.stub().resolves({ count: 1, projects: [{ id: PROJECT_ID, name: 'A-PROJECT' }] }),
+                projects: [{ id: '1', name: 'A' }]
+            })
             const topic = 'cloud/project-nodes-test/call'
             const expectedPubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`
             const expectedSubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/${topic}`
