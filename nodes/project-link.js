@@ -782,6 +782,9 @@ module.exports = function (RED) {
         } else {
             mqtt.connect()
             mqtt.registerStatus(node)
+            if (mqtt.connected) {
+                node.status({ fill: 'green', shape: 'dot', text: 'connected' })
+            }
         }
 
         /** @type {MQTT.OnMessageCallback} */
@@ -877,6 +880,9 @@ module.exports = function (RED) {
         } else {
             mqtt.connect()
             mqtt.registerStatus(node)
+            if (mqtt.connected) {
+                node.status({ fill: 'green', shape: 'dot', text: 'connected' })
+            }
         }
 
         // When the out node is set to link mode and is targeting a specific project,
@@ -992,6 +998,9 @@ module.exports = function (RED) {
         } else {
             mqtt.connect()
             mqtt.registerStatus(node)
+            if (mqtt.connected) {
+                node.status({ fill: 'green', shape: 'dot', text: 'connected' })
+            }
             // ↓ Useful for debugging ↓
             // console.log(`🔗 LINK-CALL responseTopic SUB ${node.responseTopic}`)
             mqtt.subscribe(node, node.responseTopic, { qos: 2 }, onSub)
