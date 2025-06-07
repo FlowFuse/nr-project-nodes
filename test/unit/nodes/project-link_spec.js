@@ -180,7 +180,7 @@ describe('project-link node', function () {
                 projectLinkPackage(RED)
                 const NodeConstructor = env.nodes['project link in'].NodeConstructor
                 // creating any of the nodes will cause MQTT to attempt connection and thus call getWSProxyAgent (if it's going to be called)
-                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test' })
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
                 spy.calledOnce.should.be.false()
             })
             it('should not add proxy to MQTT if no_proxy includes target domain', function () {
@@ -190,7 +190,7 @@ describe('project-link node', function () {
                 projectLinkPackage(RED)
                 const NodeConstructor = env.nodes['project link in'].NodeConstructor
                 // creating any of the nodes will cause MQTT to attempt connection and thus call getWSProxyAgent (if it's going to be called)
-                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test' })
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
 
                 spy.calledOnce.should.be.true()
                 env.mqttConnectStub.calledOnce.should.be.true()
@@ -204,7 +204,7 @@ describe('project-link node', function () {
                 projectLinkPackage(RED)
                 const NodeConstructor = env.nodes['project link in'].NodeConstructor
                 // creating any of the nodes will cause MQTT to attempt connection and thus call getWSProxyAgent (if it's going to be called)
-                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test' })
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
                 spy.calledOnce.should.be.true()
                 const getWSProxyAgentReturnValue = spy.returnValues[0]
                 getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpProxyAgent)
@@ -221,7 +221,7 @@ describe('project-link node', function () {
                 projectLinkPackage(RED)
                 const NodeConstructor = env.nodes['project link in'].NodeConstructor
                 // creating any of the nodes will cause MQTT to attempt connection and thus call getWSProxyAgent (if it's going to be called)
-                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test' })
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
                 spy.calledOnce.should.be.true()
                 const getWSProxyAgentReturnValue = spy.returnValues[0]
                 getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpsProxyAgent)
@@ -238,7 +238,7 @@ describe('project-link node', function () {
                 projectLinkPackage(RED)
                 const NodeConstructor = env.nodes['project link in'].NodeConstructor
                 // creating any of the nodes will cause MQTT to attempt connection and thus call getWSProxyAgent (if it's going to be called)
-                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test' })
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
                 spy.calledOnce.should.be.true()
                 const getWSProxyAgentReturnValue = spy.returnValues[0]
                 getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpProxyAgent)
@@ -255,7 +255,7 @@ describe('project-link node', function () {
                 projectLinkPackage(RED)
                 const NodeConstructor = env.nodes['project link in'].NodeConstructor
                 // creating any of the nodes will cause MQTT to attempt connection and thus call getWSProxyAgent (if it's going to be called)
-                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test' })
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
                 spy.calledOnce.should.be.true()
                 const getWSProxyAgentReturnValue = spy.returnValues[0]
                 getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpsProxyAgent)
@@ -278,7 +278,7 @@ describe('project-link node', function () {
             const RED = env.RED
             projectLinkPackage(RED)
             const NodeConstructor = env.nodes['project link in'].NodeConstructor
-            NodeConstructor.call(inNode, { topic, project: PROJECT_ID })
+            NodeConstructor.call(inNode, { topic, project: PROJECT_ID, timeout: 1.5 })
 
             env.mqttStub.subscribe.calledOnce.should.be.true()
             should(env.mqttStub.subscribe.args[0][0]).equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`)
@@ -304,7 +304,7 @@ describe('project-link node', function () {
             const expectedSubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/${topic}`
             projectLinkPackage(RED)
             const NodeConstructor = env.nodes['project link call'].NodeConstructor
-            NodeConstructor.call(callNode, { topic, project: PROJECT_ID })
+            NodeConstructor.call(callNode, { topic, project: PROJECT_ID, timeout: 1.5 })
             callNode.should.have.property('topic', expectedPubTopic)
             callNode.should.have.property('responseTopic', expectedSubTopic)
             env.mqttStub.subscribe.calledOnce.should.be.true()
@@ -314,7 +314,7 @@ describe('project-link node', function () {
             options.should.have.property('qos').and.equal(2)
 
             // send a message to the node so that it can publish
-            await nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
+            nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
 
             // ensure qos 2 on the publish
             env.mqttStub.publish.calledOnce.should.be.true()
@@ -356,7 +356,7 @@ describe('project-link node', function () {
             const expectedPubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`
             projectLinkPackage(RED)
             const NodeConstructor = env.nodes['project link out'].NodeConstructor
-            NodeConstructor.call(outNode, { topic, project: PROJECT_ID })
+            NodeConstructor.call(outNode, { topic, project: PROJECT_ID, timeout: 1.5 })
             outNode.should.have.property('subTopic', topic)
 
             // send a message to the node so that it can publish
