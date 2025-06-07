@@ -12,6 +12,7 @@ module.exports = function (RED) {
     const MQTT = require('mqtt')
     const urlModule = require('url')
     const utils = require('../lib/utils.js')
+    const InstancesApi = require('../lib/InstancesApi.js').InstancesApi
 
     // Constants
     const API_VERSION = 'v1'
@@ -49,7 +50,7 @@ module.exports = function (RED) {
         agent: utils.getHTTPProxyAgent(RED.settings.flowforge.forgeURL, { timeout: 4000 })
     })
 
-    const projects = require('../lib/projects.js').projects(got, {
+    const instancesApi = InstancesApi(got, {
         forgeURL: RED.settings.flowforge.forgeURL,
         teamID: RED.settings.flowforge.teamID,
         token: RED.settings.flowforge.projectLink.token,
@@ -823,10 +824,10 @@ module.exports = function (RED) {
 
             // check the project exists in the platform when broadcasting messages to a specific project
             if (node.broadcast === true && node.project !== 'all') {
-                projects.getProjects()
+                instancesApi.getInstances()
                     .then(data => {
-                        // Check if the current project exists in the projects list
-                        const projectExists = data.projects && data.projects.some(p => p.id === node.project)
+                        // Check if the current project exists in the instances list
+                        const projectExists = data.instances && data.instances.some(p => p.id === node.project)
                         if (!projectExists) {
                             throw new Error(`Selected target '${node.project}' not found in FlowFuse`)
                         }
@@ -888,10 +889,10 @@ module.exports = function (RED) {
         // When the out node is set to link mode and is targeting a specific project,
         // we should check the target exists in the platform
         if (node.mode === 'link' && node.broadcast === false) {
-            projects.getProjects()
+            instancesApi.getInstances()
                 .then(data => {
-                    // Check if the current project exists in the projects list
-                    const projectExists = data.projects && data.projects.some(p => p.id === node.project)
+                    // Check if the current project exists in the instances list
+                    const projectExists = data.instances && data.instances.some(p => p.id === node.project)
                     if (!projectExists) {
                         throw new Error(`Selected target '${node.project}' not found in FlowFuse`)
                     }
@@ -1010,10 +1011,10 @@ module.exports = function (RED) {
                     node.error(err)
                 })
 
-            projects.getProjects()
+            instancesApi.getInstances()
                 .then(data => {
-                    // Check if the current project exists in the projects list
-                    const projectExists = data.projects && data.projects.some(p => p.id === node.project)
+                    // Check if the current project exists in the instances list
+                    const projectExists = data.instances && data.instances.some(p => p.id === node.project)
                     if (!projectExists) {
                         throw new Error(`Selected target '${node.project}' not found in FlowFuse`)
                     }
@@ -1138,7 +1139,7 @@ module.exports = function (RED) {
     // Endpoint for querying list of projects in node UI
     RED.httpAdmin.get('/nr-project-link/projects', RED.auth.needsPermission('flows.write'), async function (_req, res) {
         try {
-            const list = await projects.getProjects(0) // get fresh list of projects
+            const list = await instancesApi.getInstances(0) // get fresh list of projects
             // ↓ Useful for debugging ↓
             // console.log(`🔗 LINK-PROJECTS LIST ${list.count} projects`)
             res.json(list)

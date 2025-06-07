@@ -263,8 +263,8 @@
             .done(function (data) {
                 el.empty()
 
-                const projects = (data.count ? data.projects : null) || []
-                const matched = (nodeType === 'project link in' && val === 'all') || projects.some(item => item.id === val || item.name === val)
+                const instances = (data.count ? data.instances : null) || []
+                const matched = (nodeType === 'project link in' && val === 'all') || instances.some(item => item.id === val || item.name === val)
                 if (!matched) {
                     // if the value is not in the list, add it as an option
                     el.append($('<option>', { class: 'ff-project-link-bad-option', value: val, text: val }))
@@ -277,8 +277,8 @@
                     el.append(new Option('all instances and devices', 'all', false, val === 'all'))
                 }
 
-                for (let index = 0; index < projects.length; index++) {
-                    const item = projects[index]
+                for (let index = 0; index < instances.length; index++) {
+                    const item = instances[index]
                     el.append(new Option(item.name, item.id, false, item.id === val))
                 }
                 $('input:radio[name="ff-project-link-broadcast"]:checked').trigger('change')
