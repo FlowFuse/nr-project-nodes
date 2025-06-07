@@ -829,11 +829,11 @@ module.exports = function (RED) {
                         // Check if the current project exists in the instances list
                         const projectExists = data.instances && data.instances.some(p => p.id === node.project)
                         if (!projectExists) {
-                            throw new Error(`Selected target '${node.project}' not found in FlowFuse`)
+                            throw new Error(`Selected source '${node.project}' not found in FlowFuse`)
                         }
                     }).catch(err => {
                         mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
-                        node.status({ fill: 'red', shape: 'dot', text: 'invalid target' })
+                        node.status({ fill: 'red', shape: 'dot', text: 'invalid source' })
                         node.warn(err.message)
                     })
             }

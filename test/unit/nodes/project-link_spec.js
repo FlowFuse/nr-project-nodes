@@ -426,7 +426,7 @@ describe('project-link node', function () {
             await outNode.on
             getInstancesStub.called.should.be.false()
         })
-        it('project link in should show status of "invalid target" and emit a warn', async function () {
+        it('project link in should show status of "invalid source" and emit a warn', async function () {
             const env = setup()
             const RED = env.RED
             const inNode = {
@@ -450,12 +450,12 @@ describe('project-link node', function () {
             inNode.status.calledOnce.should.be.true()
             inNode.status.args[0][0].should.have.property('fill', 'red')
             inNode.status.args[0][0].should.have.property('shape', 'dot')
-            inNode.status.args[0][0].should.have.property('text', 'invalid target')
+            inNode.status.args[0][0].should.have.property('text', 'invalid source')
             inNode.warn.called.should.be.true()
             // search for the warning message
             inNode.warn.args.some(args => {
-                return /Selected target '00000000000000000000' not found in FlowFuse/.test(args[0])
-            }).should.be.true('Expected warn to be called with "Selected target \'00000000000000000000\' not found in FlowFuse"')
+                return /Selected source '00000000000000000000' not found in FlowFuse/.test(args[0])
+            }).should.be.true('Expected warn to be called with "Selected source \'00000000000000000000\' not found in FlowFuse"')
             getInstancesStub.calledOnce.should.be.true()
         })
         it('project link call should show status of "invalid target" and emit a warn', async function () {
