@@ -6,6 +6,7 @@ const MQTT = require('mqtt')
 const projectLinkPackage = require('../../../nodes/project-link.js')
 const { HttpProxyAgent } = require('http-proxy-agent')
 const { HttpsProxyAgent } = require('https-proxy-agent')
+const InstancesApi = require('../../../lib/InstancesApi.js')
 
 const TEAM_ID = 'ABCD5678'
 const PROJECT_ID = '1234-5678-9012-9876abcdef12'
@@ -379,6 +380,147 @@ describe('project-link node', function () {
             pubOptions.properties.userProperties.should.have.property('_projectID', PROJECT_ID)
             pubOptions.properties.userProperties.should.have.property('_applicationID')
             pubOptions.properties.userProperties.should.have.property('_publishTime').and.be.a.Number()
+        })
+        it('project link in should not check getInstances when node has default settings', async function () {
+            // by default, the project link in node is set to "Receive messages sent to this instance" not
+            // "Listen for broadcast messages from ...", therefore it should not check for instances
+            const env = setup()
+            const RED = env.RED
+            const inNode = {
+                on: sinon.stub().resolves(),
+                type: 'project link in',
+                status: sinon.fake(),
+                warn: sinon.stub().resolves()
+            }
+            const getInstancesStub = sinon.stub().resolves({ count: 1, projects: [{ id: PROJECT_ID, name: 'A-PROJECT' }] })
+            InstancesApi.InstancesApi = sinon.stub().returns({
+                getInstances: getInstancesStub
+            })
+            const topic = 'cloud/project-nodes-test/xxx'
+            projectLinkPackage(RED)
+            const NodeConstructor = env.nodes['project link in'].NodeConstructor
+            NodeConstructor.call(inNode, { topic, timeout: 1.5 })
+            // wait for the on call to complete before checking status
+            await inNode.on
+            getInstancesStub.called.should.be.false()
+        })
+        it('project link out should not check getInstances when set to "return" mode', async function () {
+            // when the project link out node is set to "return" mode, it should not check for projects
+            const env = setup()
+            const RED = env.RED
+            const outNode = {
+                on: sinon.stub().resolves(),
+                type: 'project link out',
+                status: sinon.fake(),
+                warn: sinon.stub().resolves()
+            }
+            const getInstancesStub = sinon.stub().resolves({ count: 1, projects: [{ id: PROJECT_ID, name: 'A-PROJECT' }] })
+            InstancesApi.InstancesApi = sinon.stub().returns({
+                getInstances: getInstancesStub
+            })
+            const topic = 'cloud/project-nodes-test/xxx'
+            projectLinkPackage(RED)
+            const NodeConstructor = env.nodes['project link out'].NodeConstructor
+            NodeConstructor.call(outNode, { topic, mode: 'return', timeout: 1.5 })
+            // wait for the on call to complete before checking status
+            await outNode.on
+            getInstancesStub.called.should.be.false()
+        })
+        it('project link in should show status of "invalid target" and emit a warn', async function () {
+            const env = setup()
+            const RED = env.RED
+            const inNode = {
+                on: sinon.fake(),
+                type: 'project link in',
+                status: sinon.fake(),
+                warn: sinon.stub().resolves()
+            }
+            const getInstancesStub = sinon.stub().resolves({ count: 1, projects: [{ id: PROJECT_ID, name: 'A-PROJECT' }] })
+            InstancesApi.InstancesApi = sinon.stub().returns({
+                getInstances: getInstancesStub
+            })
+            const topic = 'cloud/project-nodes-test/xxx'
+            projectLinkPackage(RED)
+            const NodeConstructor = env.nodes['project link in'].NodeConstructor
+            NodeConstructor.call(inNode, { topic, project: '00000000000000000000', broadcast: true, timeout: 1.5 })
+            // await getInstances before checking status
+            await getInstancesStub
+            // await the warn call before checking status
+            await inNode.warn
+            inNode.status.calledOnce.should.be.true()
+            inNode.status.args[0][0].should.have.property('fill', 'red')
+            inNode.status.args[0][0].should.have.property('shape', 'dot')
+            inNode.status.args[0][0].should.have.property('text', 'invalid target')
+            inNode.warn.called.should.be.true()
+            // search for the warning message
+            inNode.warn.args.some(args => {
+                return /Selected target '00000000000000000000' not found in FlowFuse/.test(args[0])
+            }).should.be.true('Expected warn to be called with "Selected target \'00000000000000000000\' not found in FlowFuse"')
+            getInstancesStub.calledOnce.should.be.true()
+        })
+        it('project link call should show status of "invalid target" and emit a warn', async function () {
+            const env = setup()
+            const RED = env.RED
+            const callNode = {
+                on: sinon.fake(),
+                type: 'project link call',
+                status: sinon.fake(),
+                warn: sinon.stub().resolves()
+            }
+            const getInstancesStub = sinon.stub().resolves({ count: 1, projects: [{ id: PROJECT_ID, name: 'A-PROJECT' }] })
+            InstancesApi.InstancesApi = sinon.stub().returns({
+                getInstances: getInstancesStub
+            })
+            const topic = 'cloud/project-nodes-test/call'
+            projectLinkPackage(RED)
+            const NodeConstructor = env.nodes['project link call'].NodeConstructor
+            NodeConstructor.call(callNode, { topic, project: '00000000000000000000', timeout: 1.5 })
+            // await getInstances before checking status
+            await getInstancesStub
+            // await the warn call before checking status
+            await callNode.warn
+            callNode.status.calledOnce.should.be.true()
+            callNode.status.args[0][0].should.have.property('fill', 'red')
+            callNode.status.args[0][0].should.have.property('shape', 'dot')
+            callNode.status.args[0][0].should.have.property('text', 'invalid target')
+            callNode.warn.called.should.be.true()
+            // search for the warning message
+            callNode.warn.args.some(args => {
+                return /Selected target '00000000000000000000' not found in FlowFuse/.test(args[0])
+            }).should.be.true('Expected warn to be called with "Selected target \'00000000000000000000\' not found in FlowFuse"')
+            getInstancesStub.calledOnce.should.be.true()
+        })
+        it('project link out should show status of "invalid target" and emit a warn', async function () {
+            const env = setup()
+            const RED = env.RED
+            const outNode = {
+                on: sinon.fake(),
+                type: 'project link out',
+                status: sinon.fake(),
+                warn: sinon.stub().resolves()
+            }
+            const getInstancesStub = sinon.stub().resolves({ count: 1, projects: [{ id: PROJECT_ID, name: 'A-PROJECT' }] })
+            InstancesApi.InstancesApi = sinon.stub().returns({
+                getInstances: getInstancesStub
+            })
+            const topic = 'cloud/project-nodes-test/xxx'
+            projectLinkPackage(RED)
+            const NodeConstructor = env.nodes['project link out'].NodeConstructor
+            NodeConstructor.call(outNode, { topic, project: '00000000000000000000', mode: 'link', broadcast: false, timeout: 1.5 })
+            // await getInstances before checking status
+            await getInstancesStub
+            // await the warn call before checking status
+            await outNode.warn
+            outNode.status.calledOnce.should.be.true()
+            outNode.status.args[0][0].should.have.property('fill', 'red')
+            outNode.status.args[0][0].should.have.property('shape', 'dot')
+            outNode.status.args[0][0].should.have.property('text', 'invalid target')
+            outNode.warn.called.should.be.true()
+            // search for the warning message
+            outNode.warn.args.some(args => {
+                return /Selected target '00000000000000000000' not found in FlowFuse/.test(args[0])
+            }).should.be.true('Expected warn to be called with "Selected target \'00000000000000000000\' not found in FlowFuse"')
+            getInstancesStub.calledOnce.should.be.true()
         })
     })
 })
