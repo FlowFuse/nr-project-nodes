@@ -22,7 +22,7 @@
         "eslint-config-standard": "^17.0.0",
         "eslint-plugin-html": "7.1.0",
         "eslint-plugin-no-only-tests": "^3.1.0",
-        "mocha": "^10.4.0",
+        "mocha": "^11.6.0",
         "mocha-cli": "^1.0.1",
         "node-red": "^3.1.9",
         "node-red-node-test-helper": "^0.3.4",
