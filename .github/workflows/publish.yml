@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    uses: 'flowfuse/github-actions-workflows/.github/workflows/build_node_package.yml@v0.39.0'
+    uses: 'flowfuse/github-actions-workflows/.github/workflows/build_node_package.yml@v0.40.0'
     with:
       node: '[
               {"version": "14", "tests": true, "lint": false},
@@ -25,7 +25,7 @@ jobs:
     if: |
       ( github.event_name == 'push' && github.ref == 'refs/heads/main' ) ||
       ( github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' )
-    uses: 'flowfuse/github-actions-workflows/.github/workflows/publish_node_package.yml@v0.39.0'
+    uses: 'flowfuse/github-actions-workflows/.github/workflows/publish_node_package.yml@v0.40.0'
     with:
       package_name: nr-project-nodes
       publish_package: true
