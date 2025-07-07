@@ -17,7 +17,8 @@ describe('project-link node', function () {
         sinon.restore()
     })
 
-    function setup (httpProxy, httpsProxy, allProxy, noProxy, forgeUrl, mqttUrl) {
+    function setup (options) {
+        const { httpProxy, httpsProxy, allProxy, noProxy, forgeUrl, mqttUrl, haMode } = options || {}
         const mqttStub = {
             on: sinon.fake(),
             subscribe: sinon.fake(),
@@ -45,8 +46,10 @@ describe('project-link node', function () {
                         featureEnabled: true,
                         broker: {
                             url: mqttUrl || 'ws://localhost',
-                            clientId: 'nr-project-link'
-                        }
+                            username: 'test-username',
+                            password: 'test-password'
+                        },
+                        useSharedSubscriptions: haMode
                     }
                 }
             },
@@ -106,7 +109,14 @@ describe('project-link node', function () {
                 spy.returned({}).should.be.true()
             })
             it('should not add proxy to GOT instance if no_proxy is configured to include forge domain', function () {
-                const env = setup('http://proxy:3128', null, null, 'testfuse.com', 'https://testfuse.com', 'wss://testfuse.com')
+                const env = setup({
+                    httpProxy: 'http://proxy:3128',
+                    httpsProxy: null,
+                    allProxy: null,
+                    noProxy: 'testfuse.com',
+                    forgeUrl: 'https://testfuse.com',
+                    mqttUrl: 'wss://testfuse.com'
+                })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -114,7 +124,14 @@ describe('project-link node', function () {
                 spy.returned({}).should.be.true()
             })
             it('should not add proxy to GOT instance for http request if http_proxy is unset', function () {
-                const env = setup(null, 'http://localhost:3128', null, '127.0.0.1,google.com', 'http://testfuse.com', 'ws://testfuse.com')
+                const env = setup({
+                    httpProxy: null,
+                    httpsProxy: 'http://localhost:3128',
+                    allProxy: null,
+                    noProxy: '127.0.0.1,google.com',
+                    forgeUrl: 'http://testfuse.com',
+                    mqttUrl: 'ws://testfuse.com'
+                })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -122,7 +139,14 @@ describe('project-link node', function () {
                 spy.returned({}).should.be.true()
             })
             it('should not add proxy to GOT instance for https request if https_proxy is unset', function () {
-                const env = setup('http://localhost:3128', null, null, '127.0.0.1,google.com', 'https://testfuse.com', 'wss://testfuse.com')
+                const env = setup({
+                    httpProxy: 'http://localhost:3128',
+                    httpsProxy: null,
+                    allProxy: null,
+                    noProxy: '127.0.0.1,google.com',
+                    forgeUrl: 'https://testfuse.com',
+                    mqttUrl: 'wss://testfuse.com'
+                })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -130,7 +154,14 @@ describe('project-link node', function () {
                 spy.returned({}).should.be.true()
             })
             it('should add http proxy to GOT instance if env vars are set', function () {
-                const env = setup('http://localhost:3128', null, null, null, 'http://testfuse.com', 'ws://testfuse.com')
+                const env = setup({
+                    httpProxy: 'http://localhost:3128',
+                    httpsProxy: null,
+                    allProxy: null,
+                    noProxy: '127.0.0.1,google.com',
+                    forgeUrl: 'http://testfuse.com',
+                    mqttUrl: 'ws://testfuse.com'
+                })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -140,7 +171,14 @@ describe('project-link node', function () {
                 getHTTPProxyAgentReturnValue.should.not.have.property('https')
             })
             it('should add https proxy to GOT instance if env vars are set', function () {
-                const env = setup(null, 'http://localhost:3128', null, null, 'https://testfuse.com', 'wss://testfuse.com')
+                const env = setup({
+                    httpProxy: null,
+                    httpsProxy: 'http://localhost:3128',
+                    allProxy: null,
+                    noProxy: '127.0.0.1,google.com',
+                    forgeUrl: 'https://testfuse.com',
+                    mqttUrl: 'wss://testfuse.com'
+                })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -150,7 +188,14 @@ describe('project-link node', function () {
                 getHTTPProxyAgentReturnValue.should.not.have.property('http')
             })
             it('should add http proxy to GOT instance if all_proxy is set', function () {
-                const env = setup(null, null, 'http://localhost:3128', null, 'http://testfuse.com', 'ws://testfuse.com')
+                const env = setup({
+                    httpProxy: null,
+                    httpsProxy: null,
+                    allProxy: 'http://localhost:3128',
+                    noProxy: null,
+                    forgeUrl: 'http://testfuse.com',
+                    mqttUrl: 'ws://testfuse.com'
+                })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -160,7 +205,14 @@ describe('project-link node', function () {
                 getHTTPProxyAgentReturnValue.should.not.have.property('https')
             })
             it('should add https proxy to GOT instance if all_proxy is set', function () {
-                const env = setup(null, null, 'http://localhost:3128', null, 'https://testfuse.com', 'wss://testfuse.com')
+                const env = setup({
+                    httpProxy: null,
+                    httpsProxy: null,
+                    allProxy: 'http://localhost:3128',
+                    noProxy: null,
+                    forgeUrl: 'https://testfuse.com',
+                    mqttUrl: 'wss://testfuse.com'
+                })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -185,7 +237,14 @@ describe('project-link node', function () {
                 spy.calledOnce.should.be.false()
             })
             it('should not add proxy to MQTT if no_proxy includes target domain', function () {
-                const env = setup('http://localhost:3128', null, null, '127.0.0.1,testfuse.com,other-domain,.parent-domain.io', 'https://testfuse.com', 'ws://testfuse.com')
+                const env = setup({
+                    httpProxy: 'http://localhost:3128',
+                    httpsProxy: null,
+                    allProxy: null,
+                    noProxy: '127.0.0.1,testfuse.com,other-domain,.parent-domain.io',
+                    forgeUrl: 'https://testfuse.com',
+                    mqttUrl: 'ws://testfuse.com'
+                })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getWSProxyAgent')
                 projectLinkPackage(RED)
@@ -199,7 +258,14 @@ describe('project-link node', function () {
                 should(mqttConnectOptions.wsOptions?.agent).be.null()
             })
             it('should add http proxy to MQTT if env vars are set', function () {
-                const env = setup('http://localhost:3128')
+                const env = setup({
+                    httpProxy: 'http://localhost:3128',
+                    httpsProxy: null,
+                    allProxy: null,
+                    noProxy: null,
+                    forgeUrl: null,
+                    mqttUrl: null
+                })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getWSProxyAgent')
                 projectLinkPackage(RED)
@@ -216,7 +282,14 @@ describe('project-link node', function () {
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpProxyAgent)
             })
             it('should add https proxy to MQTT if env vars are set', function () {
-                const env = setup(null, 'http://localhost:3128', null, null, null, 'wss://localhost:1883')
+                const env = setup({
+                    httpProxy: null,
+                    httpsProxy: 'http://localhost:3128',
+                    allProxy: null,
+                    noProxy: null,
+                    forgeUrl: null,
+                    mqttUrl: 'wss://localhost:1883'
+                })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getWSProxyAgent')
                 projectLinkPackage(RED)
@@ -233,7 +306,14 @@ describe('project-link node', function () {
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpsProxyAgent)
             })
             it('should add http proxy to MQTT if all_proxy is set', function () {
-                const env = setup(null, null, 'http://localhost:3128')
+                const env = setup({
+                    httpProxy: null,
+                    httpsProxy: null,
+                    allProxy: 'http://localhost:3128',
+                    noProxy: null,
+                    forgeUrl: null,
+                    mqttUrl: null
+                })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getWSProxyAgent')
                 projectLinkPackage(RED)
@@ -250,7 +330,14 @@ describe('project-link node', function () {
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpProxyAgent)
             })
             it('should add https proxy to MQTT if all_proxy is set', function () {
-                const env = setup(null, null, 'http://localhost:3128', null, null, 'wss://localhost:1883')
+                const env = setup({
+                    httpProxy: null,
+                    httpsProxy: null,
+                    allProxy: 'http://localhost:3128',
+                    noProxy: null,
+                    forgeUrl: null,
+                    mqttUrl: 'wss://localhost:1883'
+                })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getWSProxyAgent')
                 projectLinkPackage(RED)
@@ -280,6 +367,12 @@ describe('project-link node', function () {
             projectLinkPackage(RED)
             const NodeConstructor = env.nodes['project link in'].NodeConstructor
             NodeConstructor.call(inNode, { topic, project: PROJECT_ID, timeout: 1.5 })
+
+            // Validate connect options
+            const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+            mqttConnectOptions.should.have.property('username', 'test-username')
+            mqttConnectOptions.should.have.property('password', 'test-password')
+            mqttConnectOptions.should.have.property('clientId', 'test-username:n')
 
             env.mqttStub.subscribe.calledOnce.should.be.true()
             should(env.mqttStub.subscribe.args[0][0]).equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`)
@@ -521,6 +614,63 @@ describe('project-link node', function () {
                 return /Selected target '00000000000000000000' not found in FlowFuse/.test(args[0])
             }).should.be.true('Expected warn to be called with "Selected target \'00000000000000000000\' not found in FlowFuse"')
             getInstancesStub.calledOnce.should.be.true()
+        })
+
+        it('project link in should subscribe using shared sub in HA mode', function () {
+            const env = setup({ haMode: true })
+            const inNode = {
+                on: sinon.fake(),
+                type: 'project link in'
+            }
+            const topic = 'cloud/project-nodes-test/xxx'
+            const RED = env.RED
+            projectLinkPackage(RED)
+            const NodeConstructor = env.nodes['project link in'].NodeConstructor
+            NodeConstructor.call(inNode, { topic, project: PROJECT_ID, timeout: 1.5 })
+
+            // Validate connect options
+            const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+            mqttConnectOptions.should.have.property('username', 'test-username')
+            mqttConnectOptions.should.have.property('password', 'test-password')
+            mqttConnectOptions.should.have.property('clientId')
+            mqttConnectOptions.clientId.should.have.lengthOf('test-username:n:ABCD'.length) // 36 chars for UUID + 1 for 'n' or 'b'
+            mqttConnectOptions.clientId.should.startWith('test-username:n:')
+
+            env.mqttStub.subscribe.calledOnce.should.be.true()
+            should(env.mqttStub.subscribe.args[0][0]).equal(`$share/${PROJECT_ID}/ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`)
+            const options = env.mqttStub.subscribe.args[0][1]
+            should(options).be.an.Object()
+            options.should.have.property('qos').and.equal(2)
+            options.should.have.property('properties').and.be.an.Object()
+            options.properties.should.have.property('subscriptionIdentifier').and.be.a.Number()
+        })
+        it('project link call should use shared responseTopic in HA mode', async function () {
+            const env = setup({ haMode: true })
+            const RED = env.RED
+            const nodeEvents = {}
+            const callNode = {
+                on: (event, cb) => {
+                    nodeEvents[event] = cb
+                },
+                error: sinon.fake(),
+                type: 'project link call'
+            }
+            const topic = 'cloud/project-nodes-test/call'
+            const expectedPubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`
+            // In HA mode the response topic is prefixed with $share/<projectId> and has a random suffix
+            projectLinkPackage(RED)
+            const NodeConstructor = env.nodes['project link call'].NodeConstructor
+            NodeConstructor.call(callNode, { topic, project: PROJECT_ID, timeout: 1.5 })
+            callNode.should.have.property('topic', expectedPubTopic)
+            callNode.should.have.property('responseTopic')
+            callNode.responseTopic.should.startWith(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res-`)
+            callNode.responseTopic.should.endWith(`/${topic}`)
+
+            env.mqttStub.subscribe.calledOnce.should.be.true()
+            should(env.mqttStub.subscribe.args[0][0]).equal(callNode.responseTopic)
+            const options = env.mqttStub.subscribe.args[0][1]
+            should(options).be.an.Object()
+            options.should.have.property('qos').and.equal(2)
         })
     })
 })
