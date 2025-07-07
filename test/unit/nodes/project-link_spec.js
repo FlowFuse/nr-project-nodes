@@ -633,7 +633,7 @@ describe('project-link node', function () {
             mqttConnectOptions.should.have.property('username', 'test-username')
             mqttConnectOptions.should.have.property('password', 'test-password')
             mqttConnectOptions.should.have.property('clientId')
-            mqttConnectOptions.clientId.should.have.lengthOf('test-username:n:ABCD'.length) // 36 chars for UUID + 1 for 'n' or 'b'
+            mqttConnectOptions.clientId.should.have.lengthOf('test-username:n:ABCD'.length) // the suffix is always 4 chars
             mqttConnectOptions.clientId.should.startWith('test-username:n:')
 
             env.mqttStub.subscribe.calledOnce.should.be.true()
@@ -644,7 +644,7 @@ describe('project-link node', function () {
             options.should.have.property('properties').and.be.an.Object()
             options.properties.should.have.property('subscriptionIdentifier').and.be.a.Number()
         })
-        it('project link call should use shared responseTopic in HA mode', async function () {
+        it('project link call should use unique responseTopic in HA mode', async function () {
             const env = setup({ haMode: true })
             const RED = env.RED
             const nodeEvents = {}
