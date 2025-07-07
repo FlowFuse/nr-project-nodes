@@ -1,3 +1,19 @@
+### 0.7.6
+
+ - Ensure unique client id when in HA mode (#132) @knolleary
+
+### 0.7.5
+
+ - Improve feedback when selected instance/target is invalid (#126) @Steve-Mcl
+ - Bump for V0.7.5 (#130) @Steve-Mcl
+ - Bump brace-expansion from 1.1.11 to 1.1.12 (#128) @app/dependabot
+ - Update mocha for dependencies (#127) @hardillb
+ - Bump formidable from 3.5.1 to 3.5.4 (#125) @app/dependabot
+ - chore: fix lint script (#123) @ppawlowski
+ - Bump axios from 1.7.4 to 1.8.4 (#122) @app/dependabot
+ - chore: Pin external actions to commit hash (#121) @ppawlowski
+ - Bump serialize-javascript and mocha (#117) @app/dependabot
+
 ### 0.7.4
 
  - Bump flowfuse/github-actions-workflows from 0.34.0 to 0.36.0 (#111) @dependabot
