@@ -8,6 +8,7 @@ module.exports = function (RED) {
 
     // Imports
     const crypto = require('crypto')
+    const os = require('os')
     const { default: GOT } = require('got')
     const MQTT = require('mqtt')
     const urlModule = require('url')
@@ -24,6 +25,11 @@ module.exports = function (RED) {
     // therefore, assume project owned if `projectID` is set
     const OWNER_TYPE = RED.settings.flowforge.projectID ? 'instance' : 'application'
     const featureEnabled = RED.settings.flowforge.projectLink.featureEnabled !== false
+
+    // Generate a unique ID based on the hostname
+    // This is then used when in HA/sharedSubscription mode to ensure the instance has
+    // a unique clientId that is stable across restarts
+    const haInstanceId = crypto.createHash('md5').update(os.hostname()).digest('hex').substring(0, 4)
 
     // #region JSDoc
 
@@ -622,6 +628,10 @@ module.exports = function (RED) {
                         // This ensures uniqueness between this and the launcher/device's own
                         // client connection.
                         options.clientId = RED.settings.flowforge.projectLink.broker.username + ':n'
+                        if (RED.settings.flowforge.projectLink.useSharedSubscriptions) {
+                            // In HA mode - append the haInstanceId to ensure uniqueness
+                            options.clientId += `:${haInstanceId}`
+                        }
                     }
                     if (RED.settings.flowforge.projectLink.broker.username) {
                         options.username = RED.settings.flowforge.projectLink.broker.username
@@ -809,7 +819,7 @@ module.exports = function (RED) {
         // * specific project out      ff/v1/7N152GxG2p/p/ca65f5ed-aea0-4a10-ac9a-2086b6af6700/out/b1/b1    sub broadcast
         // * +any project/device+ out  ff/v1/7N152GxG2p/p/+/out/b1/b1                                       sub broadcast
         let subscribedTopic = node.topic
-        if (RED.settings.flowforge.useSharedSubscriptions) {
+        if (RED.settings.flowforge.projectLink.useSharedSubscriptions) {
             subscribedTopic = `$share/${RED.settings.flowforge.projectID}/${node.topic}`
         }
         // ↓ Useful for debugging ↓
@@ -963,7 +973,7 @@ module.exports = function (RED) {
         node.subTopic = n.topic
         node.topic = buildLinkTopic(node, node.project, node.subTopic, false)
 
-        if (RED.settings.flowforge.useSharedSubscriptions) {
+        if (RED.settings.flowforge.projectLink.useSharedSubscriptions) {
             node.responseTopicPrefix = `res-${crypto.randomBytes(4).toString('hex')}`
         } else {
             node.responseTopicPrefix = 'res'
