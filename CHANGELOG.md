@@ -1,3 +1,8 @@
+### 0.7.7
+
+ - Update the Project Nodes category to "FlowFuse" (#135) @joepavitt
+ - Bump axios from 1.10.0 to 1.11.0 (#134) @app/dependabot
+
 ### 0.7.6
 
  - Ensure unique client id when in HA mode (#132) @knolleary
