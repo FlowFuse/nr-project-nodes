@@ -1,6 +1,6 @@
 {
     "name": "@flowfuse/nr-project-nodes",
-    "version": "0.7.6",
+    "version": "0.7.7",
     "description": "A collection of Node-RED nodes for easy communication between Node-RED instances running in the FlowFuse platform",
     "scripts": {
         "test": "mocha test/unit/**/*_spec.js --timeout 5000",
