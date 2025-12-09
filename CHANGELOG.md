@@ -1,3 +1,20 @@
+### 0.7.8
+
+ - Bump actions/checkout from 6.0.0 to 6.0.1 (#154)
+ - Bump actions/setup-node from 6.0.0 to 6.1.0 (#153)
+ - Bump actions/checkout from 5.0.0 to 6.0.0 (#152)
+ - Bump flowfuse/github-actions-workflows from 0.42.0 to 0.43.0 (#150)
+ - Bump JS-DevTools/npm-publish from 4.0.1 to 4.1.1 (#148)
+ - Bump JS-DevTools/npm-publish from 4.0.0 to 4.0.1 (#147)
+ - Bump JS-DevTools/npm-publish from 3.1.1 to 4.0.0 (#146)
+ - Bump actions/setup-node from 4.4.0 to 5.0.0 (#145)
+ - Bump actions/checkout from 4.2.2 to 5.0.0 (#144)
+ - Bump flowfuse/github-actions-workflows from 0.40.0 to 0.42.0 (#143)
+ - Ensure validator is correct for link retrun mode (#156) @hardillb
+ - Bump glob from 10.4.5 to 10.5.0 (#151) @app/dependabot
+ - Bump actions/setup-node from 5.0.0 to 6.0.0 (#149) @app/dependabot
+ - Bump form-data and node-red (#138) @app/dependabot
+
 ### 0.7.7
 
  - Update the Project Nodes category to "FlowFuse" (#135) @joepavitt
