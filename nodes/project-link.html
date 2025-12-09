@@ -353,6 +353,9 @@
                     if (this.broadcast === 'true' || this.broadcast === true) {
                         return true // don't need to validate project id if we are broadcasting to all
                     }
+                    if (this.mode === 'return') {
+                        return true
+                    }
                     // otherwise, we need a valid project id
                     return v && isValidProject(v)
                 }
