@@ -1,3 +1,7 @@
+### 0.7.9
+- Bump flowfuse/github-actions-workflows/.github/workflows/build_node_package.yml (#158)
+- Bump flowfuse/github-actions-workflows/.github/workflows/publish_node_package.yml (#159)
+
 ### 0.7.8
 
  - Bump actions/checkout from 6.0.0 to 6.0.1 (#154)
