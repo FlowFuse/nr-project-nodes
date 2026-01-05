@@ -1,4 +1,4 @@
-const should = require('should') // eslint-disable-line no-unused-vars
+const should = require('should')
 const mocha = require('mocha') // eslint-disable-line no-unused-vars
 const sinon = require('sinon')
 const utils = require('../../../lib/utils.js')
@@ -56,10 +56,10 @@ describe('project-link node', function () {
             log: {
                 error: sinon.fake(() => { console.error(...arguments) }),
                 debug: sinon.fake(() => { console.debug(...arguments) }),
-                log: sinon.fake(() => { console.log(...arguments) }),
+                log: sinon.fake(() => { console.log(...arguments) }), // eslint-disable-line no-console
                 warn: sinon.fake(() => { console.warn(...arguments) }),
                 info: sinon.fake(() => { console.info(...arguments) }),
-                trace: sinon.fake(() => { console.trace(...arguments) })
+                trace: sinon.fake(() => { console.trace(...arguments) }) // eslint-disable-line no-console
             },
             nodes: {
                 createNode: function (node, config) {
