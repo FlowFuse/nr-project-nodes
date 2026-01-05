@@ -36,6 +36,10 @@ export default [
             globals: {
                 ...globals.browser
             }
+        },
+        rules: {
+            // the html plugin does not know about the @stylistic quotes rule, so we have to include this here.
+            'quotes': ['error', 'single', { 'allowTemplateLiterals': true, 'avoidEscape': true }]
         }
     },
     {
@@ -56,7 +60,7 @@ export default [
             'no-console': ['error', { allow: ['debug', 'info', 'warn', 'error'] }],
 
             "camelcase": "off",
-            "eqeqeq": "off",
+            'eqeqeq': 'error',
             "no-empty": ["error", { "allowEmptyCatch": true }],
             "no-unused-vars": ["error", {
                 "args": "none",
