@@ -22,6 +22,7 @@ jobs:
               {"version": "16", "tests": true, "lint": false},
               {"version": "18", "tests": true, "lint": true},
               {"version": "20", "tests": true, "lint": true},
+              {"version": "24", "tests": true, "lint": true},
             ]'
 
   publish:
