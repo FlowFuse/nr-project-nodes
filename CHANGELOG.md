@@ -1,3 +1,5 @@
+# CHANGELOG
+
 ### 0.7.8
 
  - Bump actions/checkout from 6.0.0 to 6.0.1 (#154)
