@@ -27,3 +27,50 @@ jobs:
         with:
           package: '@flowfuse/nr-project-nodes'
           version: ${{ steps.getVersion.outputs.version }}
+
+  bump_nr_launcher:
+    name: Bump nr-project-nodes in nr-launcher
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.GH_BOT_APP_ID }}
+          private-key: ${{ secrets.GH_BOT_APP_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: nr-launcher
+
+      - name: Strip v prefix from tag
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "semver=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: flowfuse/nr-launcher
+          token: ${{ steps.generate_token.outputs.token }}
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+
+      - name: Update @flowfuse/nr-project-nodes dependency
+        run: npm install @flowfuse/nr-project-nodes@^${{ steps.version.outputs.semver }}
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.generate_token.outputs.token }}
+          commit-message: "chore: bump @flowfuse/nr-project-nodes to ^${{ steps.version.outputs.semver }}"
+          title: "chore: bump @flowfuse/nr-project-nodes to ^${{ steps.version.outputs.semver }}"
+          body: |
+            Automated PR to update `@flowfuse/nr-project-nodes` to `^${{ steps.version.outputs.semver }}`.
+
+            Triggered by [release ${{ github.ref_name }}](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}).
+          branch: chore-bump-nr-project-nodes
+          base: main
+          delete-branch: true
