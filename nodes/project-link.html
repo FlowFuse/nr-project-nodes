@@ -190,14 +190,14 @@
                 $('.ff-project-link-list-row').show()
                 $('#node-input-projectList').prop('disabled', isBroadcast ? true : null)
             } else if (node.type === 'project link in') {
-                // NOTE: Application assigned devices do not support direct messaging, therefore
+                // NOTE: Remote instances assigned to an application do not support direct messaging, therefore
                 // don't permit "Receive messages sent to this instance" on the project-in node
                 // when settings.RED.settings.ownerType is "application"
                 const directOptionParent = $('#ff-project-link-radio-input-direct').parent()
                 if (RED.settings.projectLinkInNode_ownerType === 'application') {
                     // update the label to reflect the fact that direct messaging is not supported
-                    directOptionParent.children('label').text('Receive messages sent to this device')
-                    RED.popover.tooltip(directOptionParent.children(), 'Option not supported when a device is assigned to an application')
+                    directOptionParent.children('label').text('Receive messages sent to this remote instance')
+                    RED.popover.tooltip(directOptionParent.children(), 'Not supported for a remote instance assigned to an application: use broadcast instead')
                     directOptionParent.children().prop('disabled', true)
                     directOptionParent.children().addClass('disabled')
                     isBroadcast = true
@@ -274,7 +274,7 @@
                 // broadcast not permitted in link call at this time but has been
                 // considered in the code base - possible future iteration
                 if (nodeType === 'project link in') {
-                    el.append(new Option('all instances and devices', 'all', false, val === 'all'))
+                    el.append(new Option('all instances and remote instances', 'all', false, val === 'all'))
                 }
 
                 for (let index = 0; index < instances.length; index++) {
@@ -445,7 +445,7 @@
 <script type="text/html" data-help-name="project link in">
     <p>Receive messages from other Node-RED instances within your FlowFuse Team</p>
     <h3>Details</h3>
-    <p>This node can either listen for messages broadcast by other instances and devices,
+    <p>This node can either listen for messages broadcast by other instances and remote instances,
         or listen for messages sent directly to this instance.</p>
     <p>The node is configured with a <code>topic</code> to listen on. This works
        like an MQTT topic - allowing instances to send messages targeting different
@@ -464,9 +464,9 @@
             <ul>
                 <li><code>instanceId</code> - the id of the instance that sent the message</li>
                 <li><code>projectId</code> - <i>deprecated</i>: the id of the instance that sent the message</li>
-                <li><code>deviceId</code> - if present, the id of the device that sent the message</li>
-                <li><code>deviceName</code> - if present, the name of the device that sent the message</li>
-                <li><code>deviceType</code> - if present, the type of the device that sent the message</li>
+                <li><code>deviceId</code> - if present, the id of the remote instance that sent the message</li>
+                <li><code>deviceName</code> - if present, the name of the remote instance that sent the message</li>
+                <li><code>deviceType</code> - if present, the type of the remote instance that sent the message</li>
                 <li><code>topic</code> - the topic the message was received on</li>
                 <li><code>callStack</code> - when using the Project Call node, this contains
                  information about the call stack. This property must not be modified.</li>
@@ -483,7 +483,7 @@
         It provides three modes of operation:
         <ul>
             <li>send messages to another instance</li>
-            <li>broadcast messages to any instance or device listening on the same topic</li>
+            <li>broadcast messages to any instance or remote instance listening on the same topic</li>
             <li>return the message to its sender if it originated from a Project Call node</li>
         </ul>
     </p>
@@ -542,9 +542,9 @@
             <ul>
                 <li><code>instanceId</code> - the id of the instance that sent the message</li>
                 <li><code>projectId</code> - <i>deprecated</i>: the id of the instance that sent the message</li>
-                <li><code>deviceId</code> - if present, the id of the device that sent the message</li>
-                <li><code>deviceName</code> - if present, the name of the device that sent the message</li>
-                <li><code>deviceType</code> - if present, the type of the device that sent the message</li>
+                <li><code>deviceId</code> - if present, the id of the remote instance that sent the message</li>
+                <li><code>deviceName</code> - if present, the name of the remote instance that sent the message</li>
+                <li><code>deviceType</code> - if present, the type of the remote instance that sent the message</li>
                 <li><code>topic</code> - the topic the message was received on</li>
                 <li><code>callStack</code> - when using the Project Call node, this contains
                     information about the call stack. This property must not be modified.</li>
