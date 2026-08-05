@@ -452,6 +452,11 @@
        subscribers.</p>
     <p>The node does not support MQTT wildcard characters - a fully qualified topic
        must be used.</p>
+    <h3>Limitations</h3>
+    <p>A specific source can only be another hosted instance in the same team. To
+       receive messages from remote instances, listen for broadcast messages instead.</p>
+    <p>A remote instance assigned to an application cannot be sent messages directly,
+       so it can only listen for broadcast messages.</p>
     <h3>Output</h3>
     <dl class="message-properties">
         <dt><i>msg</i> <span class="property-type">object</span></dt>
@@ -500,6 +505,9 @@
         messages from a Project Call node. If this property is not present, the
         node will be unable to respond properly.
     </p>
+    <h3>Limitations</h3>
+    <p>Sending to a specific target only works for hosted instances in the same team.
+       To reach remote instances, broadcast on a topic instead.</p>
     <h3>Input</h3>
     <dl class="message-properties">
         <dt><i>msg</i> <span class="property-type">object</span></dt>
@@ -529,6 +537,16 @@
         The node is configured with a <code>topic</code> to send on. This works
         like an MQTT topic - allowing instances to send messages targeting different
         subscribers.
+    </p>
+    <h3>Limitations</h3>
+    <p>
+        The target must be a hosted instance in the same team. A remote instance can
+        make calls, but cannot receive them.
+    </p>
+    <p>
+        The default timeout is 30 seconds. The target instance must be running and
+        have a <code>project link in</code> node listening on the same topic, so
+        logic called this way is unavailable whenever the link to the platform is down.
     </p>
     <h3>Output</h3>
     <dl class="message-properties">
