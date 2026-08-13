@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## [0.7.9](https://github.com/FlowFuse/nr-project-nodes/compare/v0.7.8...v0.7.9) (2026-08-13)
+
+
+### Bug Fixes
+
+* explain invalid project link targets and name the target on a call timeout ([#255](https://github.com/FlowFuse/nr-project-nodes/issues/255)) ([bf0f95b](https://github.com/FlowFuse/nr-project-nodes/commit/bf0f95bf50dcb2bb69ddfa0a3a43e5155549064e))
+
 ### 0.7.8
 
  - Bump actions/checkout from 6.0.0 to 6.0.1 (#154)
