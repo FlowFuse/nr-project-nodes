@@ -434,6 +434,37 @@ describe('project-link node', function () {
             should(pubOptions).be.an.Object()
             pubOptions.should.have.property('qos').and.equal(2)
         })
+        it('project link call should name the target and topic when a call times out', async function () {
+            const env = setup()
+            const RED = env.RED
+            const nodeEvents = {}
+            const callNode = {
+                on: (event, cb) => {
+                    nodeEvents[event] = cb
+                },
+                error: sinon.fake(),
+                type: 'project link call'
+            }
+            const getInstancesStub = sinon.stub().resolves({ count: 1, instances: [{ id: PROJECT_ID, name: 'A-PROJECT' }] })
+            InstancesApi.InstancesApi = sinon.stub().returns({
+                getInstances: getInstancesStub
+            })
+            const topic = 'cloud/project-nodes-test/call'
+            projectLinkPackage(RED)
+            const NodeConstructor = env.nodes['project link call'].NodeConstructor
+            NodeConstructor.call(callNode, { topic, project: PROJECT_ID, timeout: 0.05 })
+            await getInstancesStub
+
+            nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
+            await new Promise(resolve => setTimeout(resolve, 150))
+
+            callNode.error.called.should.be.true()
+            const message = callNode.error.args[0][0]
+            message.should.match(/timeout after 0.1s/)
+            message.should.match(/A-PROJECT/)
+            message.should.match(/cloud\/project-nodes-test\/call/)
+            message.should.match(/project link in/)
+        })
         it('project link out should publish using QoS 2', async function () {
             const env = setup()
             const RED = env.RED

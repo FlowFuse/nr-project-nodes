@@ -789,7 +789,7 @@ module.exports = function (RED) {
         } else if (node.broadcast !== true && OWNER_TYPE === 'application') {
             configOk = false
             node.status({ fill: 'red', shape: 'dot', text: 'unsupported source option' })
-            node.warn('Receiving direct messages is not supported for application assigned devices. Please update the nodes source option to use "Listen for broadcast messages".')
+            node.warn('Receiving direct messages is not supported for a remote instance assigned to an application. Please update the node source option to use "Listen for broadcast messages".')
         } else {
             mqtt.connect()
             mqtt.registerStatus(node)
@@ -839,7 +839,7 @@ module.exports = function (RED) {
                         // Check if the current project exists in the instances list
                         const projectExists = data.instances && data.instances.some(p => p.id === node.project)
                         if (!projectExists) {
-                            throw new Error(`Selected source '${node.project}' not found in FlowFuse`)
+                            throw new Error(`Selected source '${node.project}' not found in FlowFuse. Listening to a specific source only works for hosted instances in this team: to receive from remote instances, listen for broadcasts instead.`)
                         }
                     }).catch(err => {
                         mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
@@ -904,7 +904,7 @@ module.exports = function (RED) {
                     // Check if the current project exists in the instances list
                     const projectExists = data.instances && data.instances.some(p => p.id === node.project)
                     if (!projectExists) {
-                        throw new Error(`Selected target '${node.project}' not found in FlowFuse`)
+                        throw new Error(`Selected target '${node.project}' not found in FlowFuse. Sending to a specific target only works for hosted instances in this team: to reach remote instances, broadcast on a topic instead.`)
                     }
                 }).catch(err => {
                     mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
@@ -1024,9 +1024,11 @@ module.exports = function (RED) {
             instancesApi.getInstances()
                 .then(data => {
                     // Check if the current project exists in the instances list
-                    const projectExists = data.instances && data.instances.some(p => p.id === node.project)
+                    const target = data.instances && data.instances.find(p => p.id === node.project)
+                    node.targetName = target?.name
+                    const projectExists = !!target
                     if (!projectExists) {
-                        throw new Error(`Selected target '${node.project}' not found in FlowFuse`)
+                        throw new Error(`Selected target '${node.project}' not found in FlowFuse. A call can only target a hosted instance in this team: a remote instance can make calls, but cannot receive them.`)
                     }
                 }).catch(err => {
                     mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
@@ -1140,7 +1142,9 @@ module.exports = function (RED) {
             const messageEvent = messageEvents[eventId]
             if (messageEvent) {
                 delete messageEvents[eventId]
-                node.error('timeout', messageEvent.msg)
+                const seconds = Math.round(timeout / 100) / 10
+                const target = node.targetName ? `'${node.targetName}'` : `instance ${node.project}`
+                node.error(`timeout after ${seconds}s waiting for a response from ${target} on topic '${node.subTopic}'. Check that the target instance is running and has a 'project link in' node listening on that topic.`, messageEvent.msg)
             }
         }
     }
