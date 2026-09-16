@@ -435,7 +435,7 @@ describe('project-link node', function () {
                 should(pubOptions).be.an.Object()
                 pubOptions.should.have.property('qos').and.equal(2)
             } catch (err) {
-                console.err('ben', err)
+                console.error('ben', err)
             }
         })
         it('project link call should name the target and topic when a call times out', async function () {
