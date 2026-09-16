@@ -19,6 +19,7 @@ describe('project-link node', function () {
 
     function setup (options) {
         const { httpProxy, httpsProxy, allProxy, noProxy, forgeUrl, mqttUrl, haMode } = options || {}
+        console.error('BEN',forgeUrl)
         const mqttStub = {
             on: sinon.fake(),
             subscribe: sinon.fake(),
@@ -39,7 +40,7 @@ describe('project-link node', function () {
         const RED = {
             settings: {
                 flowforge: {
-                    forgeURL: forgeUrl || 'https://local.example.com',
+                    forgeURL: forgeUrl || 'https://example.com',
                     projectID: PROJECT_ID,
                     teamID: TEAM_ID,
                     projectLink: {
