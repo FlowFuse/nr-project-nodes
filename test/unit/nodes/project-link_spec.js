@@ -393,12 +393,17 @@ describe('project-link node', function () {
                 error: sinon.fake(),
                 type: 'project link call'
             }
+            const getInstancesStub = sinon.stub().resolves({ count: 1, instances: [{ id: PROJECT_ID, name: 'A-PROJECT' }] })
+            InstancesApi.InstancesApi = sinon.stub().returns({
+                getInstances: getInstancesStub
+            })
             const topic = 'cloud/project-nodes-test/call'
             const expectedPubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`
             const expectedSubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/${topic}`
             projectLinkPackage(RED)
             const NodeConstructor = env.nodes['project link call'].NodeConstructor
             NodeConstructor.call(callNode, { topic, project: PROJECT_ID, timeout: 1.5 })
+            await getInstancesStub
             callNode.should.have.property('topic', expectedPubTopic)
             callNode.should.have.property('responseTopic', expectedSubTopic)
             env.mqttStub.subscribe.calledOnce.should.be.true()
