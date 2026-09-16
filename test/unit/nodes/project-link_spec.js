@@ -39,7 +39,7 @@ describe('project-link node', function () {
         const RED = {
             settings: {
                 flowforge: {
-                    forgeURL: forgeUrl || 'https://local-ben.testfuse.com',
+                    forgeURL: forgeUrl || 'https://www.hardill.me.uk',
                     projectID: PROJECT_ID,
                     teamID: TEAM_ID,
                     projectLink: {
