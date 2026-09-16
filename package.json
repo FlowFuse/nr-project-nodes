@@ -23,7 +23,7 @@
         "eslint-plugin-html": "^8.1.3",
         "eslint-plugin-no-only-tests": "^3.3.0",
         "globals": "^16.5.0",
-        "mocha": "^11.6.0",
+        "mocha": "^12.0.1",
         "mocha-cli": "^1.0.1",
         "neostandard": "^0.12.2",
         "node-red": "^5.0.1",
