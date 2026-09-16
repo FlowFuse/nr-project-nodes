@@ -382,7 +382,7 @@ describe('project-link node', function () {
             options.should.have.property('properties').and.be.an.Object()
             options.properties.should.have.property('subscriptionIdentifier').and.be.a.Number()
         })
-        t('project link call should publish and subscribe using QoS 2', async function () {
+        it('project link call should publish and subscribe using QoS 2', async function () {
             const env = setup()
             const RED = env.RED
             const nodeEvents = {}
