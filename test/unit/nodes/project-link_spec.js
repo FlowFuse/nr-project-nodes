@@ -102,7 +102,7 @@ describe('project-link node', function () {
 
         describe('got', function () {
             it('should not add proxy to GOT instance if env vars are not set', function () {
-                const env = setup({ forgeURL: 'https://local1.testfuse.com' })
+                const env = setup({ forgeUrl: 'https://local1.testfuse.com' })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
