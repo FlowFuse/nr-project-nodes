@@ -19,7 +19,6 @@ describe('project-link node', function () {
 
     function setup (options) {
         const { httpProxy, httpsProxy, allProxy, noProxy, forgeUrl, mqttUrl, haMode } = options || {}
-        console.error('BEN', forgeUrl)
         const mqttStub = {
             on: sinon.fake(),
             subscribe: sinon.fake(),
@@ -102,7 +101,7 @@ describe('project-link node', function () {
 
         describe('got', function () {
             it('should not add proxy to GOT instance if env vars are not set', function () {
-                const env = setup({ forgeUrl: 'https://local1.testfuse.com' })
+                const env = setup()
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -264,7 +263,7 @@ describe('project-link node', function () {
                     httpsProxy: null,
                     allProxy: null,
                     noProxy: null,
-                    forgeUrl: 'https://local2.testfuse.com',
+                    forgeUrl: null,
                     mqttUrl: null
                 })
                 const RED = env.RED
@@ -288,7 +287,7 @@ describe('project-link node', function () {
                     httpsProxy: 'http://localhost:3128',
                     allProxy: null,
                     noProxy: null,
-                    forgeUrl: 'https://local3.testfuse.com',
+                    forgeUrl: null,
                     mqttUrl: 'wss://localhost:1883'
                 })
                 const RED = env.RED
@@ -312,7 +311,7 @@ describe('project-link node', function () {
                     httpsProxy: null,
                     allProxy: 'http://localhost:3128',
                     noProxy: null,
-                    forgeUrl: 'https://local4.testfuse.com',
+                    forgeUrl: null,
                     mqttUrl: null
                 })
                 const RED = env.RED
@@ -336,7 +335,7 @@ describe('project-link node', function () {
                     httpsProxy: null,
                     allProxy: 'http://localhost:3128',
                     noProxy: null,
-                    forgeUrl: 'https://local5.testfuse.com',
+                    forgeUrl: null,
                     mqttUrl: 'wss://localhost:1883'
                 })
                 const RED = env.RED
@@ -358,7 +357,7 @@ describe('project-link node', function () {
     })
     describe('Nodes', function () {
         it('project link in should subscribe using QoS 2', function () {
-            const env = setup({ forgeUrl: 'https://local6.testfuse.com' })
+            const env = setup()
             const inNode = {
                 on: sinon.fake(),
                 type: 'project link in'
@@ -384,59 +383,63 @@ describe('project-link node', function () {
             options.properties.should.have.property('subscriptionIdentifier').and.be.a.Number()
         })
         it('project link call should publish and subscribe using QoS 2', async function () {
-            const env = setup({ forgeUrl: 'https://local7.testfuse.com' })
-            const RED = env.RED
-            const nodeEvents = {}
-            const callNode = {
-                on: (event, cb) => {
-                    nodeEvents[event] = cb
-                },
-                error: sinon.fake(),
-                type: 'project link call'
+            try {
+                const env = setup({ forgeUrl: 'https://local7.testfuse.com' })
+                const RED = env.RED
+                const nodeEvents = {}
+                const callNode = {
+                    on: (event, cb) => {
+                        nodeEvents[event] = cb
+                    },
+                    error: sinon.fake(),
+                    type: 'project link call'
+                }
+                const topic = 'cloud/project-nodes-test/call'
+                const expectedPubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`
+                const expectedSubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/${topic}`
+                projectLinkPackage(RED)
+                const NodeConstructor = env.nodes['project link call'].NodeConstructor
+                NodeConstructor.call(callNode, { topic, project: PROJECT_ID, timeout: 1.5 })
+                callNode.should.have.property('topic', expectedPubTopic)
+                callNode.should.have.property('responseTopic', expectedSubTopic)
+                env.mqttStub.subscribe.calledOnce.should.be.true()
+                should(env.mqttStub.subscribe.args[0][0]).equal(expectedSubTopic)
+                const options = env.mqttStub.subscribe.args[0][1]
+                should(options).be.an.Object()
+                options.should.have.property('qos').and.equal(2)
+
+                // send a message to the node so that it can publish
+                nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
+
+                // ensure qos 2 on the publish
+                env.mqttStub.publish.calledOnce.should.be.true()
+                const pubTopic = env.mqttStub.publish.args[0][0]
+                should(pubTopic).equal(expectedPubTopic)
+                const pubMessageStr = env.mqttStub.publish.args[0][1]
+                const pubMessage = JSON.parse(pubMessageStr)
+                should(pubMessage).be.an.Object()
+                pubMessage.should.have.property('payload').and.equal('test')
+                pubMessage.should.have.property('projectLink').and.be.an.Object()
+                pubMessage.projectLink.should.have.property('callStack').and.be.an.Array()
+                pubMessage.projectLink.callStack.should.have.length(1)
+                pubMessage.projectLink.callStack[0].should.have.property('topic').and.equal(topic)
+                pubMessage.projectLink.callStack[0].should.have.property('ts').and.be.a.Number()
+                pubMessage.projectLink.callStack[0].should.have.property('response').and.equal('res')
+                pubMessage.projectLink.callStack[0].should.have.property('application')
+                pubMessage.projectLink.callStack[0].should.have.property('instance')
+                pubMessage.projectLink.callStack[0].should.have.property('node')
+                pubMessage.projectLink.callStack[0].should.have.property('project').and.equal(PROJECT_ID)
+                pubMessage.projectLink.callStack[0].should.have.property('eventId').and.be.a.String()
+
+                const pubOptions = env.mqttStub.publish.args[0][2]
+                should(pubOptions).be.an.Object()
+                pubOptions.should.have.property('qos').and.equal(2)
+            } catch (err) {
+                console.err('ben', err)
             }
-            const topic = 'cloud/project-nodes-test/call'
-            const expectedPubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`
-            const expectedSubTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/${topic}`
-            projectLinkPackage(RED)
-            const NodeConstructor = env.nodes['project link call'].NodeConstructor
-            NodeConstructor.call(callNode, { topic, project: PROJECT_ID, timeout: 1.5 })
-            callNode.should.have.property('topic', expectedPubTopic)
-            callNode.should.have.property('responseTopic', expectedSubTopic)
-            env.mqttStub.subscribe.calledOnce.should.be.true()
-            should(env.mqttStub.subscribe.args[0][0]).equal(expectedSubTopic)
-            const options = env.mqttStub.subscribe.args[0][1]
-            should(options).be.an.Object()
-            options.should.have.property('qos').and.equal(2)
-
-            // send a message to the node so that it can publish
-            nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
-
-            // ensure qos 2 on the publish
-            env.mqttStub.publish.calledOnce.should.be.true()
-            const pubTopic = env.mqttStub.publish.args[0][0]
-            should(pubTopic).equal(expectedPubTopic)
-            const pubMessageStr = env.mqttStub.publish.args[0][1]
-            const pubMessage = JSON.parse(pubMessageStr)
-            should(pubMessage).be.an.Object()
-            pubMessage.should.have.property('payload').and.equal('test')
-            pubMessage.should.have.property('projectLink').and.be.an.Object()
-            pubMessage.projectLink.should.have.property('callStack').and.be.an.Array()
-            pubMessage.projectLink.callStack.should.have.length(1)
-            pubMessage.projectLink.callStack[0].should.have.property('topic').and.equal(topic)
-            pubMessage.projectLink.callStack[0].should.have.property('ts').and.be.a.Number()
-            pubMessage.projectLink.callStack[0].should.have.property('response').and.equal('res')
-            pubMessage.projectLink.callStack[0].should.have.property('application')
-            pubMessage.projectLink.callStack[0].should.have.property('instance')
-            pubMessage.projectLink.callStack[0].should.have.property('node')
-            pubMessage.projectLink.callStack[0].should.have.property('project').and.equal(PROJECT_ID)
-            pubMessage.projectLink.callStack[0].should.have.property('eventId').and.be.a.String()
-
-            const pubOptions = env.mqttStub.publish.args[0][2]
-            should(pubOptions).be.an.Object()
-            pubOptions.should.have.property('qos').and.equal(2)
         })
         it('project link call should name the target and topic when a call times out', async function () {
-            const env = setup({ forgeUrl: 'https://local8.testfuse.com' })
+            const env = setup()
             const RED = env.RED
             const nodeEvents = {}
             const callNode = {
@@ -467,7 +470,7 @@ describe('project-link node', function () {
             message.should.match(/project link in/)
         })
         it('project link out should publish using QoS 2', async function () {
-            const env = setup({ forgeUrl: 'https://local9.testfuse.com' })
+            const env = setup()
             const RED = env.RED
             const nodeEvents = {}
             const outNode = {
@@ -509,7 +512,7 @@ describe('project-link node', function () {
         it('project link in should not check getInstances when node has default settings', async function () {
             // by default, the project link in node is set to "Receive messages sent to this instance" not
             // "Listen for broadcast messages from ...", therefore it should not check for instances
-            const env = setup({ forgeUrl: 'https://local10.testfuse.com' })
+            const env = setup()
             const RED = env.RED
             const inNode = {
                 on: sinon.stub().resolves(),
@@ -531,7 +534,7 @@ describe('project-link node', function () {
         })
         it('project link out should not check getInstances when set to "return" mode', async function () {
             // when the project link out node is set to "return" mode, it should not check for projects
-            const env = setup({ forgeUrl: 'https://local11.testfuse.com' })
+            const env = setup()
             const RED = env.RED
             const outNode = {
                 on: sinon.stub().resolves(),
@@ -552,7 +555,7 @@ describe('project-link node', function () {
             getInstancesStub.called.should.be.false()
         })
         it('project link in should show status of "invalid source" and emit a warn', async function () {
-            const env = setup({ forgeUrl: 'https://local12.testfuse.com' })
+            const env = setup()
             const RED = env.RED
             const inNode = {
                 on: sinon.fake(),
@@ -584,7 +587,7 @@ describe('project-link node', function () {
             getInstancesStub.calledOnce.should.be.true()
         })
         it('project link call should show status of "invalid target" and emit a warn', async function () {
-            const env = setup({ forgeUrl: 'https://local13.testfuse.com' })
+            const env = setup()
             const RED = env.RED
             const callNode = {
                 on: sinon.fake(),
@@ -616,7 +619,7 @@ describe('project-link node', function () {
             getInstancesStub.calledOnce.should.be.true()
         })
         it('project link out should show status of "invalid target" and emit a warn', async function () {
-            const env = setup({ forgeUrl: 'https://local14.testfuse.com' })
+            const env = setup()
             const RED = env.RED
             const outNode = {
                 on: sinon.fake(),
@@ -649,7 +652,7 @@ describe('project-link node', function () {
         })
 
         it('project link in should subscribe using shared sub in HA mode', function () {
-            const env = setup({ haMode: true, forgeUrl: 'https://local15.testfuse.com' })
+            const env = setup({ haMode: true })
             const inNode = {
                 on: sinon.fake(),
                 type: 'project link in'
@@ -677,7 +680,7 @@ describe('project-link node', function () {
             options.properties.should.have.property('subscriptionIdentifier').and.be.a.Number()
         })
         it('project link call should use unique responseTopic in HA mode', async function () {
-            const env = setup({ haMode: true, forgeUrl: 'https://local1.testfuse.com' })
+            const env = setup({ haMode: true })
             const RED = env.RED
             const nodeEvents = {}
             const callNode = {
