@@ -39,7 +39,7 @@ describe('project-link node', function () {
         const RED = {
             settings: {
                 flowforge: {
-                    forgeURL: forgeUrl || 'https://local.testflowfuse.com',
+                    forgeURL: forgeUrl || 'https://local.testfuse.com',
                     projectID: PROJECT_ID,
                     teamID: TEAM_ID,
                     projectLink: {
@@ -227,7 +227,7 @@ describe('project-link node', function () {
                 on: sinon.fake()
             }
             it('should not add proxy to MQTT if env vars are not set', function () {
-                const env = setup({ forgeUrl: 'https://local2.testfuse.com' })
+                const env = setup()
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getWSProxyAgent')
                 projectLinkPackage(RED)
