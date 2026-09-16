@@ -19,7 +19,7 @@ describe('project-link node', function () {
 
     function setup (options) {
         const { httpProxy, httpsProxy, allProxy, noProxy, forgeUrl, mqttUrl, haMode } = options || {}
-        console.error('BEN',forgeUrl)
+        console.error('BEN', forgeUrl)
         const mqttStub = {
             on: sinon.fake(),
             subscribe: sinon.fake(),
