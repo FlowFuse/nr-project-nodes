@@ -101,7 +101,7 @@ describe('project-link node', function () {
 
         describe('got', function () {
             it('should not add proxy to GOT instance if env vars are not set', function () {
-                const env = setup()
+                const env = setup({ forgeURL: 'https://local1.testfuse.com' })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getHTTPProxyAgent')
                 projectLinkPackage(RED)
@@ -227,7 +227,7 @@ describe('project-link node', function () {
                 on: sinon.fake()
             }
             it('should not add proxy to MQTT if env vars are not set', function () {
-                const env = setup()
+                const env = setup({ forgeURL: 'https://local2.testfuse.com' })
                 const RED = env.RED
                 const spy = sinon.spy(utils, 'getWSProxyAgent')
                 projectLinkPackage(RED)
@@ -263,7 +263,7 @@ describe('project-link node', function () {
                     httpsProxy: null,
                     allProxy: null,
                     noProxy: null,
-                    forgeUrl: null,
+                    forgeUrl: 'https://local2.testfuse.com',
                     mqttUrl: null
                 })
                 const RED = env.RED
@@ -287,7 +287,7 @@ describe('project-link node', function () {
                     httpsProxy: 'http://localhost:3128',
                     allProxy: null,
                     noProxy: null,
-                    forgeUrl: null,
+                    forgeUrl: 'https://local3.testfuse.com',
                     mqttUrl: 'wss://localhost:1883'
                 })
                 const RED = env.RED
@@ -311,7 +311,7 @@ describe('project-link node', function () {
                     httpsProxy: null,
                     allProxy: 'http://localhost:3128',
                     noProxy: null,
-                    forgeUrl: null,
+                    forgeUrl: 'https://local4.testfuse.com',
                     mqttUrl: null
                 })
                 const RED = env.RED
@@ -335,7 +335,7 @@ describe('project-link node', function () {
                     httpsProxy: null,
                     allProxy: 'http://localhost:3128',
                     noProxy: null,
-                    forgeUrl: null,
+                    forgeUrl: 'https://local5.testfuse.com',
                     mqttUrl: 'wss://localhost:1883'
                 })
                 const RED = env.RED
@@ -357,7 +357,7 @@ describe('project-link node', function () {
     })
     describe('Nodes', function () {
         it('project link in should subscribe using QoS 2', function () {
-            const env = setup()
+            const env = setup({ forgeURL: 'https://local6.testfuse.com' })
             const inNode = {
                 on: sinon.fake(),
                 type: 'project link in'
@@ -383,7 +383,7 @@ describe('project-link node', function () {
             options.properties.should.have.property('subscriptionIdentifier').and.be.a.Number()
         })
         it('project link call should publish and subscribe using QoS 2', async function () {
-            const env = setup()
+            const env = setup({ forgeURL: 'https://local7.testfuse.com' })
             const RED = env.RED
             const nodeEvents = {}
             const callNode = {
@@ -435,7 +435,7 @@ describe('project-link node', function () {
             pubOptions.should.have.property('qos').and.equal(2)
         })
         it('project link call should name the target and topic when a call times out', async function () {
-            const env = setup()
+            const env = setup({ forgeURL: 'https://local8.testfuse.com' })
             const RED = env.RED
             const nodeEvents = {}
             const callNode = {
@@ -466,7 +466,7 @@ describe('project-link node', function () {
             message.should.match(/project link in/)
         })
         it('project link out should publish using QoS 2', async function () {
-            const env = setup()
+            const env = setup({ forgeURL: 'https://local9.testfuse.com' })
             const RED = env.RED
             const nodeEvents = {}
             const outNode = {
@@ -508,7 +508,7 @@ describe('project-link node', function () {
         it('project link in should not check getInstances when node has default settings', async function () {
             // by default, the project link in node is set to "Receive messages sent to this instance" not
             // "Listen for broadcast messages from ...", therefore it should not check for instances
-            const env = setup()
+            const env = setup({ forgeURL: 'https://local10.testfuse.com' })
             const RED = env.RED
             const inNode = {
                 on: sinon.stub().resolves(),
@@ -530,7 +530,7 @@ describe('project-link node', function () {
         })
         it('project link out should not check getInstances when set to "return" mode', async function () {
             // when the project link out node is set to "return" mode, it should not check for projects
-            const env = setup()
+            const env = setup({ forgeURL: 'https://local11.testfuse.com' })
             const RED = env.RED
             const outNode = {
                 on: sinon.stub().resolves(),
@@ -551,7 +551,7 @@ describe('project-link node', function () {
             getInstancesStub.called.should.be.false()
         })
         it('project link in should show status of "invalid source" and emit a warn', async function () {
-            const env = setup()
+            const env = setup({ forgeURL: 'https://local12.testfuse.com' })
             const RED = env.RED
             const inNode = {
                 on: sinon.fake(),
@@ -583,7 +583,7 @@ describe('project-link node', function () {
             getInstancesStub.calledOnce.should.be.true()
         })
         it('project link call should show status of "invalid target" and emit a warn', async function () {
-            const env = setup()
+            const env = setup({ forgeURL: 'https://local13.testfuse.com' })
             const RED = env.RED
             const callNode = {
                 on: sinon.fake(),
@@ -615,7 +615,7 @@ describe('project-link node', function () {
             getInstancesStub.calledOnce.should.be.true()
         })
         it('project link out should show status of "invalid target" and emit a warn', async function () {
-            const env = setup()
+            const env = setup({ forgeURL: 'https://local14.testfuse.com' })
             const RED = env.RED
             const outNode = {
                 on: sinon.fake(),
@@ -648,7 +648,7 @@ describe('project-link node', function () {
         })
 
         it('project link in should subscribe using shared sub in HA mode', function () {
-            const env = setup({ haMode: true })
+            const env = setup({ haMode: true, forgeURL: 'https://local15.testfuse.com' })
             const inNode = {
                 on: sinon.fake(),
                 type: 'project link in'
@@ -676,7 +676,7 @@ describe('project-link node', function () {
             options.properties.should.have.property('subscriptionIdentifier').and.be.a.Number()
         })
         it('project link call should use unique responseTopic in HA mode', async function () {
-            const env = setup({ haMode: true })
+            const env = setup({ haMode: true, forgeURL: 'https://local1.testfuse.com' })
             const RED = env.RED
             const nodeEvents = {}
             const callNode = {
