@@ -17,13 +17,27 @@ jobs:
         with:
           token: ${{ secrets.NPM_PUBLISH_TOKEN }}
           access: public
-      - name: getVersion
+
+  update-nr-catalogue:
+    name: Update Node-RED Catalogue
+    needs: [publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install jq
+        shell: bash
+        run: command -v jq || (sudo apt-get update && sudo apt-get install -y jq)
+      - name: Get package version
         id: getVersion
         shell: bash
         run: |
-          VERSION=$(npm info . --json version | sed -e 's/"//g')
+          VERSION=$(jq -r .version package.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-      - uses: flowfuse/github-actions-workflows/actions/update-nr-flows@update-nr-flows/v1
+      - name: Update Node-RED Catalogue
+        uses: flowfuse/github-actions-workflows/actions/update-nr-flows@update-nr-flows/v1
         with:
           package: '@flowfuse/nr-project-nodes'
           version: ${{ steps.getVersion.outputs.version }}
@@ -77,7 +91,7 @@ jobs:
 
   notify-slack:
     name: Notify about release failure
-    needs: [publish, bump_nr_launcher]
+    needs: [publish, update-nr-catalogue, bump_nr_launcher]
     if: failure()
     runs-on: ubuntu-latest
 
