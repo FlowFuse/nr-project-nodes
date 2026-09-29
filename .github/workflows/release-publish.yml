@@ -72,6 +72,17 @@ jobs:
         with:
           node-version: 24
 
+      - name: Wait for @flowfuse/nr-project-nodes to be available in the public npm registry
+        timeout-minutes: 30
+        env:
+          VERSION: ${{ steps.version.outputs.semver }}
+        run: |
+          until npm view "@flowfuse/nr-project-nodes@${VERSION}" version --prefer-online 2>/dev/null | grep -qx "${VERSION}"; do
+            echo "@flowfuse/nr-project-nodes@${VERSION} not available yet, retrying in 15s"
+            sleep 15
+          done
+          echo "@flowfuse/nr-project-nodes@${VERSION} is available"
+
       - name: Update @flowfuse/nr-project-nodes dependency
         run: npm install @flowfuse/nr-project-nodes@^${{ steps.version.outputs.semver }}
 
