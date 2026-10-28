@@ -16,6 +16,8 @@ This can be safely ignored.
 
  - FlowFuse 0.8+ running with an active EE license and its integrated MQTT Broker
  - FlowFuse 1.14+ for communicating with application assigned devices
+ - A FlowFuse release that provides the `project-link/targets` API for application aware
+   targets, sending directly to application assigned devices and application broadcasts
 
 Alternatively, you can [sign up to FlowFuse Cloud](https://flowfuse.com/product/)
 now to try these nodes out.
@@ -39,10 +41,14 @@ on. This is similar in concept to MQTT topics - although the nodes do not curren
 support using MQTT wildcards in their topics.
 
 The Project Out nodes can either broadcast messages on a topic to anyone listening,
-or they can send messages on a topic to a specific other project.
+or they can send messages on a topic to a specific other instance or remote instance.
 
 The Project In nodes do the opposite - they can either listen for messages being
 broadcast, or for messages sent directly to them.
+
+Broadcasts are sent and received on one of two channels: the **team** channel (the default),
+or the **application** channel, which only instances in the same application can use.
+The two channels are separate. Older versions of the nodes (before 0.8.0) do not send application broadcasts.
 
 The Project Call node can be used to send a message to another Project In node
 and then wait for a response, with a built-in timeout if it doesn't arrive.
