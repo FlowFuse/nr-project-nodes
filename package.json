@@ -42,7 +42,7 @@
         "node": ">=16.x"
     },
     "dependencies": {
-        "got": "^11.8.6",
+        "got": "^16.1.0",
         "http-proxy-agent": "^7.0.2",
         "https-proxy-agent": "^7.0.4",
         "mqtt": "^4.3.7",
