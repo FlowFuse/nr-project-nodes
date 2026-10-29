@@ -46,7 +46,7 @@
         "http-proxy-agent": "^7.0.2",
         "https-proxy-agent": "^7.0.4",
         "mqtt": "^4.3.7",
-        "proxy-from-env": "^1.1.0"
+        "proxy-from-env": "^2.1.0"
     },
     "overrides": {
         "path-to-regexp@<=0.1.12": "0.1.13",
