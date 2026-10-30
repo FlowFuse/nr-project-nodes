@@ -150,9 +150,11 @@
 (function () {
     const SCOPE_TEAM = 'team'
     const SCOPE_APPLICATION = 'application'
-    // An application broadcast from a project link out node is saved as `broadcast: 'application'`
-    // rather than `true`. Older versions of these nodes ignore `scope` and would otherwise send it as
-    // a team broadcast; they treat this value as a direct send with no target and send nothing.
+    // Application broadcasts are saved as `broadcast: 'application'` rather than `true` on project link
+    // in and out nodes. Older versions of these nodes ignore `scope`, so `true` would make them send or
+    // listen for team broadcasts. They treat this value as not a broadcast instead: an out node sends
+    // nothing (a broadcast is saved without a target) and an in node only listens for messages sent
+    // directly to this instance.
     const BROADCAST_APPLICATION = 'application'
 
     /**
@@ -477,7 +479,11 @@
         if (node.type === 'project link in' || node.type === 'project link out') {
             node.broadcast = $('input:radio[name="ff-project-link-broadcast"]:checked').val() === 'true'
             node.scope = $('#node-input-scope').val() === SCOPE_APPLICATION ? SCOPE_APPLICATION : SCOPE_TEAM
-            if (node.type === 'project link out' && node.broadcast && node.scope === SCOPE_APPLICATION) {
+            if (node.type === 'project link out' && node.broadcast) {
+                // the target list is disabled while broadcasting but keeps its selection
+                node.project = ''
+            }
+            if (node.broadcast && node.scope === SCOPE_APPLICATION) {
                 node.broadcast = BROADCAST_APPLICATION
             }
         }

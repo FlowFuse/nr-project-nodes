@@ -24,7 +24,7 @@ module.exports = function (RED) {
     const TOPIC_TYPE_APPLICATION = 'a' // ff/v1/<team>/a/<application>/p/<instance|dev:device>/out/...
     const SCOPE_TEAM = 'team'
     const SCOPE_APPLICATION = 'application'
-    const BROADCAST_APPLICATION = 'application' // project link out `broadcast` value for an application broadcast
+    const BROADCAST_APPLICATION = 'application' // project link in/out `broadcast` value for an application broadcast
     const DEFAULT_PROJECT_CACHE_AGE = 30 * 1000 // 30 seconds
     const INSTANCES_RETRY_MIN = 30 * 1000 // first retry after 30 seconds (+/- jitter)
     const INSTANCES_RETRY_MAX = 5 * 60 * 1000 // back off to 5 minutes (+/- jitter)
@@ -961,8 +961,10 @@ module.exports = function (RED) {
         node.ownId = OWNER_TYPE === 'application' ? 'dev:' + process.env.FF_DEVICE_ID : RED.settings.flowforge.projectID
         node.project = n.project
         node.subTopic = n.topic
-        node.broadcast = n.broadcast === true || n.broadcast === 'true'
-        node.scope = (node.broadcast && n.scope === SCOPE_APPLICATION) ? SCOPE_APPLICATION : SCOPE_TEAM
+        // application broadcast listeners are saved as `broadcast: 'application'` so older versions of
+        // these nodes (which ignore `scope`) do not listen for team broadcasts instead
+        node.broadcast = n.broadcast === true || n.broadcast === 'true' || n.broadcast === BROADCAST_APPLICATION
+        node.scope = (node.broadcast && (n.scope === SCOPE_APPLICATION || n.broadcast === BROADCAST_APPLICATION)) ? SCOPE_APPLICATION : SCOPE_TEAM
         node.subscriptionIdentifier = (node.broadcast && n.project === 'all') ? 2 : 1
         if (node.scope === SCOPE_TEAM) {
             node.topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast)

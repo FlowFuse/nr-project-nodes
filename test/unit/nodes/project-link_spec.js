@@ -775,6 +775,28 @@ describe('project-link node', function () {
             getInstancesStub.calledOnce.should.be.true()
         })
 
+        it('project link in subscribes to application broadcasts saved as broadcast "application"', async function () {
+            const env = setup()
+            asApplicationDevice(env)
+            stubInstances()
+            const topic = 'app/topic'
+            createNode(env, 'project link in', { topic, broadcast: 'application', project: 'all', scope: 'application' })
+            await flushPromises()
+            env.mqttStub.subscribe.calledOnce.should.be.true()
+            should(env.mqttStub.subscribe.args[0][0]).equal(`ff/v1/${TEAM_ID}/a/${APPLICATION_ID}/p/+/out/${topic}`)
+            env.mqttStub.subscribe.args[0][1].properties.should.have.property('subscriptionIdentifier', 2)
+        })
+
+        it('project link in treats broadcast "application" as application scope even without a scope', async function () {
+            const env = setup()
+            asApplicationDevice(env)
+            stubInstances()
+            const topic = 'app/topic'
+            createNode(env, 'project link in', { topic, broadcast: 'application', project: 'all' })
+            await flushPromises()
+            should(env.mqttStub.subscribe.args[0][0]).equal(`ff/v1/${TEAM_ID}/a/${APPLICATION_ID}/p/+/out/${topic}`)
+        })
+
         it('project link in on a device reports an error when the platform does not support application scope', async function () {
             const env = setup()
             asApplicationDevice(env)

@@ -48,7 +48,9 @@ broadcast, or for messages sent directly to them.
 
 Broadcasts are sent and received on one of two channels: the **team** channel (the default),
 or the **application** channel, which only instances in the same application can use.
-The two channels are separate. Older versions of the nodes (before 0.8.0) do not send application broadcasts.
+The two channels are separate. Older versions of the nodes (before 0.8.0) do not send or receive application broadcasts.
+If a flow is run on an older version, application broadcast Out nodes send nothing, and application
+broadcast In nodes do not receive team broadcasts (at most, they receive messages sent directly to that instance).
 
 The Project Call node can be used to send a message to another Project In node
 and then wait for a response, with a built-in timeout if it doesn't arrive.
