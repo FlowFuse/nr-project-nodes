@@ -26,8 +26,8 @@ module.exports = function (RED) {
     const SCOPE_APPLICATION = 'application'
     const BROADCAST_APPLICATION = 'application' // project link out `broadcast` value for an application broadcast
     const DEFAULT_PROJECT_CACHE_AGE = 30 * 1000 // 30 seconds
-    const APPLICATION_ID_RETRY_MIN = 30 * 1000 // first retry after 30 seconds (+/- jitter)
-    const APPLICATION_ID_RETRY_MAX = 5 * 60 * 1000 // back off to 5 minutes (+/- jitter)
+    const INSTANCES_RETRY_MIN = 30 * 1000 // first retry after 30 seconds (+/- jitter)
+    const INSTANCES_RETRY_MAX = 5 * 60 * 1000 // back off to 5 minutes (+/- jitter)
     const ERROR_APPLICATION_SCOPE_NOT_SUPPORTED = 'APPLICATION_SCOPE_NOT_SUPPORTED'
     // It is not unreasonable to expect `projectID` and `applicationID` are set for an instance
     // owned device, however an application owned device should not have a projectID.
@@ -113,13 +113,59 @@ module.exports = function (RED) {
         return ownApplicationId
     }
 
-    // In nodes on the application channel wait here until the application id is known.
-    // One lookup is shared by all waiting nodes. While FlowFuse cannot be reached, it is
-    // retried with backoff and jitter, and straight away when the MQTT client connects.
-    const applicationIdWaiters = new Set()
-    let applicationIdLookup = null
-    let applicationIdRetryTimer = null
-    let applicationIdRetryCount = 0
+    // Nodes that need the instances list at startup (to learn the application id, or to check
+    // a source/target exists) wait here until FlowFuse answers. One lookup is shared by all
+    // waiting nodes. While FlowFuse cannot be reached, it is retried with backoff and jitter,
+    // and straight away when the MQTT client connects.
+    const instancesWaiters = new Set()
+    let instancesLookup = null
+    let instancesRetryTimer = null
+    let instancesRetryCount = 0
+
+    /**
+     * Wait for the instances list
+     * @param {object} waiter
+     * @param {function(object)} waiter.resolve - called with the instances data
+     * @param {function(Error)} waiter.waiting - called each time a lookup fails and will be retried
+     * @returns {function} call to stop waiting
+     */
+    function waitForInstances (waiter) {
+        instancesWaiters.add(waiter)
+        lookupInstances()
+        return function () {
+            instancesWaiters.delete(waiter)
+            if (!instancesWaiters.size) {
+                clearTimeout(instancesRetryTimer)
+                instancesRetryTimer = null
+                instancesRetryCount = 0
+            }
+        }
+    }
+
+    function lookupInstances () {
+        if (instancesLookup || !instancesWaiters.size) {
+            return
+        }
+        clearTimeout(instancesRetryTimer)
+        instancesRetryTimer = null
+        // clear the in-flight lookup before settling, so a waiter added by a resolve callback starts a new lookup
+        instancesLookup = getInstances()
+            .finally(() => {
+                instancesLookup = null
+            })
+            .then(data => {
+                const waiters = [...instancesWaiters]
+                instancesWaiters.clear()
+                instancesRetryCount = 0
+                waiters.forEach(waiter => waiter.resolve(data))
+            }, err => {
+                instancesWaiters.forEach(waiter => waiter.waiting(err))
+                if (instancesWaiters.size) {
+                    const delay = utils.getRetryDelay(instancesRetryCount++, INSTANCES_RETRY_MIN, INSTANCES_RETRY_MAX)
+                    instancesRetryTimer = setTimeout(lookupInstances, delay)
+                }
+            })
+    }
 
     /**
      * Wait for the id of the application this instance belongs to
@@ -130,48 +176,49 @@ module.exports = function (RED) {
      * @returns {function} call to stop waiting
      */
     function waitForApplicationId (waiter) {
-        applicationIdWaiters.add(waiter)
-        lookupApplicationId()
-        return function () {
-            applicationIdWaiters.delete(waiter)
-            if (!applicationIdWaiters.size) {
-                clearTimeout(applicationIdRetryTimer)
-                applicationIdRetryTimer = null
-                applicationIdRetryCount = 0
-            }
-        }
-    }
-
-    function lookupApplicationId () {
-        if (applicationIdLookup || !applicationIdWaiters.size) {
-            return
-        }
-        clearTimeout(applicationIdRetryTimer)
-        applicationIdRetryTimer = null
-        const settle = (fn) => {
-            const waiters = [...applicationIdWaiters]
-            applicationIdWaiters.clear()
-            applicationIdRetryCount = 0
-            waiters.forEach(fn)
-        }
-        applicationIdLookup = getOwnApplicationId()
-            .then(applicationId => {
-                settle(waiter => waiter.resolve(applicationId))
-            })
-            .catch(err => {
-                if (err.code === ERROR_APPLICATION_SCOPE_NOT_SUPPORTED) {
-                    settle(waiter => waiter.reject(err))
+        return waitForInstances({
+            resolve: () => {
+                if (!ownApplicationId || !supportsApplications) {
+                    const err = new Error('Application scoped messages are not supported by this version of FlowFuse')
+                    err.code = ERROR_APPLICATION_SCOPE_NOT_SUPPORTED
+                    waiter.reject(err)
                     return
                 }
-                applicationIdWaiters.forEach(waiter => waiter.waiting(err))
-                if (applicationIdWaiters.size) {
-                    const delay = utils.getRetryDelay(applicationIdRetryCount++, APPLICATION_ID_RETRY_MIN, APPLICATION_ID_RETRY_MAX)
-                    applicationIdRetryTimer = setTimeout(lookupApplicationId, delay)
+                waiter.resolve(ownApplicationId)
+            },
+            waiting: waiter.waiting
+        })
+    }
+
+    /**
+     * Check the source/target of a node exists in FlowFuse.
+     * If it does not, the node shows `statusText` in red and warns. While FlowFuse cannot be
+     * reached, the node warns once, keeps its connection status and the check is retried.
+     * @param {object} node - the node to check
+     * @param {'source'|'target'} kind - what is being checked (for the warning)
+     * @param {string} statusText - the status to show if the check fails
+     * @param {function(object):(string|undefined)} check - called with the instances data, returns an error message if the check fails
+     * @returns {function} call to stop checking
+     */
+    function checkTarget (node, kind, statusText, check) {
+        let warned = false
+        return waitForInstances({
+            resolve: data => {
+                const error = check(data)
+                if (error) {
+                    mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
+                    node.status({ fill: 'red', shape: 'dot', text: statusText })
+                    node.warn(error)
                 }
-            })
-            .finally(() => {
-                applicationIdLookup = null
-            })
+            },
+            waiting: err => {
+                if (!warned) {
+                    warned = true
+                    // connection errors (e.g. ECONNREFUSED to `localhost`) can have an empty message
+                    node.warn(`Unable to check ${kind} '${node.project}' with FlowFuse, will keep retrying: ${err.message || err.code || 'unknown error'}`)
+                }
+            }
+        })
     }
 
     function jsonReplacer (_key, value) {
@@ -427,8 +474,8 @@ module.exports = function (RED) {
                 } catch (error) { /* do nothing */ }
             })
             // the broker authenticates connections with FlowFuse, so it is likely reachable
-            // again: retry any pending application id lookup now rather than wait for the timer
-            lookupApplicationId()
+            // again: retry any pending instances lookup now rather than wait for the timer
+            lookupInstances()
             // Hosted instances are not given their application id in settings. Learn it now so
             // messages sent by any node carry it (`_applicationID`). Best effort: until this
             // completes, messages are sent without it, as they always were.
@@ -960,6 +1007,7 @@ module.exports = function (RED) {
         // * +any project/device+ out  ff/v1/7N152GxG2p/a/APP-ID/p/+/out/b1/b1
         let subscribedTopic = null
         let stopWaitingForApplicationId = null
+        let stopCheckingSource = null
         const subscribe = function () {
             subscribedTopic = node.topic
             if (RED.settings.flowforge.projectLink.useSharedSubscriptions) {
@@ -1025,30 +1073,29 @@ module.exports = function (RED) {
         }
         function validateSource () {
             if (node.broadcast === true && node.project !== 'all') {
-                getInstances()
-                    .then(data => {
-                        // Check if the current project exists in the instances list
-                        const source = data.instances && data.instances.find(p => p.id === node.project)
-                        if (!source) {
-                            if (data.supportsApplications) {
-                                throw new Error(`Selected source '${node.project}' not found in FlowFuse. Listening to a specific source only works for instances in this team.`)
-                            }
-                            throw new Error(`Selected source '${node.project}' not found in FlowFuse. Listening to a specific source only works for hosted instances in this team: to receive from remote instances, listen for broadcasts instead.`)
+                stopCheckingSource = checkTarget(node, 'source', 'invalid source', data => {
+                    // Check if the current project exists in the instances list
+                    const source = data.instances && data.instances.find(p => p.id === node.project)
+                    if (!source) {
+                        if (data.supportsApplications) {
+                            return `Selected source '${node.project}' not found in FlowFuse. Listening to a specific source only works for instances in this team.`
                         }
-                        if (node.scope === SCOPE_APPLICATION && data.supportsApplications && source.applicationId !== ownApplicationId) {
-                            throw new Error(`Selected source '${source.name}' is not in this application. Application broadcasts can only be received from instances in the same application.`)
-                        }
-                    }).catch(err => {
-                        mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
-                        node.status({ fill: 'red', shape: 'dot', text: 'invalid source' })
-                        node.warn(err.message)
-                    })
+                        return `Selected source '${node.project}' not found in FlowFuse. Listening to a specific source only works for hosted instances in this team: to receive from remote instances, listen for broadcasts instead.`
+                    }
+                    if (node.scope === SCOPE_APPLICATION && data.supportsApplications && source.applicationId !== ownApplicationId) {
+                        return `Selected source '${source.name}' is not in this application. Application broadcasts can only be received from instances in the same application.`
+                    }
+                })
             }
         }
         node.on('close', function (done) {
             if (stopWaitingForApplicationId) {
                 stopWaitingForApplicationId()
                 stopWaitingForApplicationId = null
+            }
+            if (stopCheckingSource) {
+                stopCheckingSource()
+                stopCheckingSource = null
             }
             const unsubscribe = subscribedTopic ? mqtt.unsubscribe(node, subscribedTopic, onSub) : Promise.resolve()
             unsubscribe
@@ -1098,22 +1145,18 @@ module.exports = function (RED) {
 
         // When the out node is set to link mode and is targeting a specific project,
         // we should check the target exists in the platform
+        let stopCheckingTarget = null
         if (node.mode === 'link' && node.broadcast === false) {
-            getInstances()
-                .then(data => {
-                    // Check if the current project exists in the instances list
-                    const projectExists = data.instances && data.instances.some(p => p.id === node.project)
-                    if (!projectExists) {
-                        if (data.supportsApplications) {
-                            throw new Error(`Selected target '${node.project}' not found in FlowFuse. Sending to a specific target only works for instances in this team.`)
-                        }
-                        throw new Error(`Selected target '${node.project}' not found in FlowFuse. Sending to a specific target only works for hosted instances in this team: to reach remote instances, broadcast on a topic instead.`)
+            stopCheckingTarget = checkTarget(node, 'target', 'invalid target', data => {
+                // Check if the current project exists in the instances list
+                const projectExists = data.instances && data.instances.some(p => p.id === node.project)
+                if (!projectExists) {
+                    if (data.supportsApplications) {
+                        return `Selected target '${node.project}' not found in FlowFuse. Sending to a specific target only works for instances in this team.`
                     }
-                }).catch(err => {
-                    mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
-                    node.status({ fill: 'red', shape: 'dot', text: 'invalid target' })
-                    node.warn(err.message)
-                })
+                    return `Selected target '${node.project}' not found in FlowFuse. Sending to a specific target only works for hosted instances in this team: to reach remote instances, broadcast on a topic instead.`
+                }
+            })
         }
 
         node.on('input', async function (msg, _send, done) {
@@ -1155,6 +1198,10 @@ module.exports = function (RED) {
             }
         })
         node.on('close', function (done) {
+            if (stopCheckingTarget) {
+                stopCheckingTarget()
+                stopCheckingTarget = null
+            }
             try {
                 if (!mqtt.hasSubscriptions && !mqtt.closing) {
                     mqtt.close(done)
@@ -1190,6 +1237,7 @@ module.exports = function (RED) {
         }
         /** @type {MessageEvents} */
         const messageEvents = {}
+        let stopCheckingTarget = null
 
         function onSub (err, topic, msg, packet) {
             const t = parseLinkTopic(topic)
@@ -1225,23 +1273,17 @@ module.exports = function (RED) {
                     node.error(err)
                 })
 
-            getInstances()
-                .then(data => {
-                    // Check if the current project exists in the instances list
-                    const target = data.instances && data.instances.find(p => p.id === node.project)
-                    node.targetName = target?.name
-                    const projectExists = !!target
-                    if (!projectExists) {
-                        if (data.supportsApplications) {
-                            throw new Error(`Selected target '${node.project}' not found in FlowFuse. A call can only target an instance in this team.`)
-                        }
-                        throw new Error(`Selected target '${node.project}' not found in FlowFuse. A call can only target a hosted instance in this team: a remote instance can make calls, but cannot receive them.`)
+            stopCheckingTarget = checkTarget(node, 'target', 'invalid target', data => {
+                // Check if the current project exists in the instances list
+                const target = data.instances && data.instances.find(p => p.id === node.project)
+                node.targetName = target?.name
+                if (!target) {
+                    if (data.supportsApplications) {
+                        return `Selected target '${node.project}' not found in FlowFuse. A call can only target an instance in this team.`
                     }
-                }).catch(err => {
-                    mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
-                    node.status({ fill: 'red', shape: 'dot', text: 'invalid target' })
-                    node.warn(err.message)
-                })
+                    return `Selected target '${node.project}' not found in FlowFuse. A call can only target a hosted instance in this team: a remote instance can make calls, but cannot receive them.`
+                }
+            })
         }
 
         node.on('input', async function (msg, send, done) {
@@ -1307,6 +1349,10 @@ module.exports = function (RED) {
         })
 
         node.on('close', function (done) {
+            if (stopCheckingTarget) {
+                stopCheckingTarget()
+                stopCheckingTarget = null
+            }
             mqtt.unsubscribe(node, node.responseTopic)
                 .then(() => {})
                 .catch(_err => {})
