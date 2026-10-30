@@ -1083,6 +1083,64 @@ describe('project-link node', function () {
                 getInstancesStub.callCount.should.equal(1)
                 env.mqttStub.subscribe.called.should.be.false()
             })
+
+            const checkedNodes = [
+                { type: 'project link in', kind: 'source', status: 'invalid source', config: { topic, broadcast: true, project: 'other-instance' } },
+                { type: 'project link out', kind: 'target', status: 'invalid target', config: { topic, mode: 'link', broadcast: false, project: 'other-instance' } },
+                { type: 'project link call', kind: 'target', status: 'invalid target', config: { topic, project: 'other-instance' } }
+            ]
+            const otherInstance = { id: 'other-instance', name: 'Other', type: 'instance', applicationId: APPLICATION_ID }
+
+            for (const { type, kind, status, config } of checkedNodes) {
+                describe(type, function () {
+                    it(`keeps the connection status and warns with the error code while the ${kind} cannot be checked`, async function () {
+                        const env = setup()
+                        const getInstancesStub = stubInstances({ instances: [otherInstance] })
+                        getInstancesStub.onCall(0).rejects(Object.assign(new Error(''), { code: 'ECONNREFUSED' }))
+                        const { node } = createNode(env, type, config)
+                        await flushPromises()
+                        node.status.calledWithMatch({ text: status }).should.be.false()
+                        node.warn.calledOnce.should.be.true()
+                        node.warn.args[0][0].should.equal(`Unable to check ${kind} 'other-instance' with FlowFuse, will keep retrying: ECONNREFUSED`)
+
+                        const onConnect = env.mqttStub.on.args.find(args => args[0] === 'connect')[1]
+                        onConnect({ properties: {} })
+                        await flushPromises()
+                        node.status.calledWithMatch({ fill: 'green', text: 'connected' }).should.be.true()
+                        node.status.calledWithMatch({ text: status }).should.be.false()
+                        node.warn.calledOnce.should.be.true()
+                    })
+
+                    it(`shows "${status}" when a retry finds the ${kind} is not in FlowFuse`, async function () {
+                        const env = setup()
+                        const getInstancesStub = stubInstances({ instances: [] })
+                        getInstancesStub.onCall(0).rejects(new Error('connect ECONNREFUSED'))
+                        const { node } = createNode(env, type, config)
+                        await flushPromises()
+                        node.status.calledWithMatch({ text: status }).should.be.false()
+
+                        await clock.tickAsync(35 * 1000)
+                        await flushPromises()
+                        getInstancesStub.callCount.should.equal(2)
+                        node.status.calledWithMatch({ fill: 'red', text: status }).should.be.true()
+                        node.warn.args[1][0].should.match(new RegExp(`Selected ${kind} 'other-instance' not found in FlowFuse`))
+                    })
+
+                    it(`stops checking the ${kind} when closed`, async function () {
+                        const env = setup()
+                        const getInstancesStub = stubInstances({ instances: [] })
+                        getInstancesStub.rejects(new Error('connect ECONNREFUSED'))
+                        const { node, nodeEvents } = createNode(env, type, config)
+                        await flushPromises()
+                        nodeEvents.close(sinon.fake())
+
+                        await clock.tickAsync(10 * 60 * 1000)
+                        await flushPromises()
+                        getInstancesStub.callCount.should.equal(1)
+                        node.status.calledWithMatch({ text: status }).should.be.false()
+                    })
+                })
+            }
         })
     })
 })
