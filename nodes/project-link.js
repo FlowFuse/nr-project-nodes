@@ -165,6 +165,9 @@ module.exports = function (RED) {
                     instancesRetryTimer = setTimeout(lookupInstances, delay)
                 }
             })
+            .catch(err => {
+                RED.log.error(`Project Link instances lookup failed: ${err.message}`)
+            })
     }
 
     /**
