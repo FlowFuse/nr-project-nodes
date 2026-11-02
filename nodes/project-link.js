@@ -844,8 +844,12 @@ module.exports = function (RED) {
                     const host = brokerAddress.hostname
                     const connectOptions = {
                         protocol,
-                        // ws/wss build a URL from the hostname, so an ipv6 address needs its brackets.
-                        // mqtt/mqtts pass it to `net`/`tls`, which need them removed
+                        // INFO: ws/wss: mqtt.js builds a URL again (`ws://${hostname}:${port}${path}`), so an ipv6 address
+                        //       needs its brackets. Without them, `ws://::1:8883/` is an invalid URL
+                        // INFO: mqtt: mqtt.js passes the hostname unchanged to `net.createConnection({ host })`, which expects
+                        //       a bare IP or a DNS name. `[::1]` is not an IP, so it is looked up as a name and fails with ENOTFOUND
+                        // INFO: mqtts: as mqtt, and mqtt.js also sets the TLS servername to the hostname when it is not an IP,
+                        //       so `[::1]` would be sent as the servername
                         hostname: protocol.startsWith('ws') || !host.startsWith('[') ? host : host.slice(1, -1),
                         port: brokerAddress.port ? Number(brokerAddress.port) : undefined, // mqtt.js uses the protocol's default port when not set
                         path: brokerAddress.pathname + brokerAddress.search
