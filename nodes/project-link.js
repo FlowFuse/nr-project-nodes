@@ -11,7 +11,6 @@ module.exports = function (RED) {
     const os = require('os')
     const { default: GOT } = require('got')
     const MQTT = require('mqtt')
-    const urlModule = require('url')
     const utils = require('../lib/utils.js')
     const InstancesApi = require('../lib/InstancesApi.js').InstancesApi
     const { isValidSubscriptionTopic, isValidPublishTopic } = require('../lib/topics.js')
@@ -666,12 +665,12 @@ module.exports = function (RED) {
                         try {
                             // console.log(`SUB ${topic}`)
                             client.subscribe(topic, subOptions, (err, granted) => {
-                                if (err) {
-                                    reject(err)
-                                } else if (granted?.some(g => g.qos >= 128)) {
+                                if (err?.code >= 128 || granted?.some(g => g.qos >= 128)) {
                                     // the broker refused the subscription. This can happen when the
                                     // FlowFuse platform does not support the selected option
                                     reject(new Error('Subscription not permitted by the FlowFuse platform'))
+                                } else if (err) {
+                                    reject(err)
                                 } else {
                                     resolve(true)
                                 }
@@ -831,18 +830,25 @@ module.exports = function (RED) {
                     connAck.returnCode = null
 
                     connecting = true
-                    // PROBLEM: ipv6 ws addresses cannot connect
-                    // INFO: Calling mqtt.connect('http://[::1]:8883') fails with error  ERR_INVALID_URL
-                    // INFO: Calling mqtt.connect(new URL('http://[::1]:8883')) fails because `connect` only accepts a `string` or `url.parse` object
-                    // INFO: Calling mqtt.connect(url.parse('http://[::1]:8883') fails because unlike new URL, url.parse drops the square brackets off hostname
-                    //       (mqtt.js disassembles and reassembles the url using hostname + port so `ws://[::1]:8883` becomes `ws://::1:8883`)
-                    // INFO: WS src code uses `new URL` so when `mqtt.js` passes the reassembled IP `http://::1:8883`, it fails with error ERR_INVALID_URL
+                    // Why the broker URL is not passed to mqtt.js:
+                    // - mqtt.js parses it with `url.parse`, which removes the square brackets of an ipv6 hostname,
+                    //   so `ws://[::1]:8883` becomes the invalid URL `ws://::1:8883`
+                    // - mqtt.js v5 ignores a parsed URL object when options are also given, and connects to `mqtt://localhost:1883`
+                    // Instead, the URL is parsed here with `new URL` (which keeps the brackets) and passed to mqtt.js as options.
                     // SEE: https://github.com/mqttjs/MQTT.js/issues/1569
                     const brokerURL = RED.settings.flowforge.projectLink.broker.url || 'mqtt://localhost:1883'
-                    // eslint-disable-next-line n/no-deprecated-api
-                    const parsedURL = urlModule.parse(brokerURL)
-                    const newURL = new URL(brokerURL)
-                    parsedURL.hostname = newURL.hostname
+                    const brokerAddress = new URL(brokerURL)
+                    const protocol = brokerAddress.protocol.replace(/:$/, '')
+                    const host = brokerAddress.hostname
+                    const connectOptions = {
+                        protocol,
+                        // ws/wss build a URL from the hostname, so an ipv6 address keeps its brackets.
+                        // mqtt/mqtts pass the hostname to `net`/`tls`, which need the address without brackets
+                        // (`[::1]` is looked up as a DNS name and fails, and would be sent as the TLS servername)
+                        hostname: protocol.startsWith('ws') || !host.startsWith('[') ? host : host.slice(1, -1),
+                        port: brokerAddress.port ? Number(brokerAddress.port) : undefined, // mqtt.js uses the protocol's default port when not set
+                        path: brokerAddress.pathname + brokerAddress.search
+                    }
 
                     // wsOptions.agent is expected to be an HTTP or HTTPS agent based on the request protocol
                     if (process.env.all_proxy || process.env.http_proxy || process.env.https_proxy) {
@@ -851,7 +857,8 @@ module.exports = function (RED) {
                         }
                     }
 
-                    client = MQTT.connect(parsedURL, options)
+                    const mqttOptions = Object.assign({}, connectOptions, options)
+                    client = MQTT.connect(mqttOptions)
                     clients.push(client) // add to clients array for containment and auto cleanup of multiple clients
                     on('connect', onConnect)
                     on('error', onError)

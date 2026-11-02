@@ -45,7 +45,7 @@
         "got": "^11.8.6",
         "http-proxy-agent": "^7.0.2",
         "https-proxy-agent": "^7.0.4",
-        "mqtt": "^4.3.7",
+        "mqtt": "^5.16.1",
         "proxy-from-env": "^1.1.0"
     },
     "overrides": {

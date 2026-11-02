@@ -31,7 +31,8 @@ describe('project-link node', function () {
             removeAllListeners: sinon.fake(),
             end: sinon.fake()
         }
-        const mqttConnectStub = sinon.stub(MQTT, 'connect').returns(mqttStub)
+        // mqtt 5 exports `connect` as a read only getter that reads it from `MQTT.default`
+        const mqttConnectStub = sinon.stub(MQTT.default, 'connect').returns(mqttStub)
         process.env.http_proxy = httpProxy || ''
         process.env.https_proxy = httpsProxy || ''
         process.env.all_proxy = allProxy || ''
@@ -255,8 +256,59 @@ describe('project-link node', function () {
 
                 spy.calledOnce.should.be.true()
                 env.mqttConnectStub.calledOnce.should.be.true()
-                const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+                const mqttConnectOptions = env.mqttConnectStub.args[0][0]
                 should(mqttConnectOptions.wsOptions?.agent).be.null()
+            })
+            it('should connect to the broker URL', function () {
+                const env = setup({ mqttUrl: 'wss://broker.testfuse.com:8443/mqtt' })
+                projectLinkPackage(env.RED)
+                const NodeConstructor = env.nodes['project link in'].NodeConstructor
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
+                env.mqttConnectStub.calledOnce.should.be.true()
+                const connectOptions = env.mqttConnectStub.args[0][0]
+                connectOptions.should.have.property('protocol', 'wss')
+                connectOptions.should.have.property('hostname', 'broker.testfuse.com')
+                connectOptions.should.have.property('port', 8443)
+                connectOptions.should.have.property('path', '/mqtt')
+            })
+            it('should keep the path and query of the broker URL', function () {
+                const env = setup({ mqttUrl: 'ws://broker.testfuse.com/some/path?x=1' })
+                projectLinkPackage(env.RED)
+                const NodeConstructor = env.nodes['project link in'].NodeConstructor
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
+                env.mqttConnectStub.calledOnce.should.be.true()
+                const connectOptions = env.mqttConnectStub.args[0][0]
+                connectOptions.should.have.property('path', '/some/path?x=1')
+            })
+            it('should leave the port unset when the broker URL has none', function () {
+                const env = setup({ mqttUrl: 'wss://broker.testfuse.com' })
+                projectLinkPackage(env.RED)
+                const NodeConstructor = env.nodes['project link in'].NodeConstructor
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
+                env.mqttConnectStub.calledOnce.should.be.true()
+                const connectOptions = env.mqttConnectStub.args[0][0]
+                connectOptions.should.have.property('port', undefined)
+            })
+            it('should keep the brackets of an ipv6 ws broker hostname', function () {
+                const env = setup({ mqttUrl: 'ws://[::1]:8883' })
+                projectLinkPackage(env.RED)
+                const NodeConstructor = env.nodes['project link in'].NodeConstructor
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
+                env.mqttConnectStub.calledOnce.should.be.true()
+                const connectOptions = env.mqttConnectStub.args[0][0]
+                connectOptions.should.have.property('hostname', '[::1]')
+                connectOptions.should.have.property('port', 8883)
+            })
+            it('should remove the brackets of an ipv6 mqtt broker hostname', function () {
+                const env = setup({ mqttUrl: 'mqtt://[::1]:1883' })
+                projectLinkPackage(env.RED)
+                const NodeConstructor = env.nodes['project link in'].NodeConstructor
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
+                env.mqttConnectStub.calledOnce.should.be.true()
+                const connectOptions = env.mqttConnectStub.args[0][0]
+                connectOptions.should.have.property('protocol', 'mqtt')
+                connectOptions.should.have.property('hostname', '::1')
+                connectOptions.should.have.property('port', 1883)
             })
             it('should add http proxy to MQTT if env vars are set', function () {
                 const env = setup({
@@ -278,7 +330,7 @@ describe('project-link node', function () {
                 getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpProxyAgent)
 
                 env.mqttConnectStub.calledOnce.should.be.true()
-                const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+                const mqttConnectOptions = env.mqttConnectStub.args[0][0]
                 mqttConnectOptions.should.have.property('wsOptions').and.be.an.Object()
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpProxyAgent)
             })
@@ -302,7 +354,7 @@ describe('project-link node', function () {
                 getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpsProxyAgent)
 
                 env.mqttConnectStub.calledOnce.should.be.true()
-                const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+                const mqttConnectOptions = env.mqttConnectStub.args[0][0]
                 mqttConnectOptions.should.have.property('wsOptions').and.be.an.Object()
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpsProxyAgent)
             })
@@ -326,7 +378,7 @@ describe('project-link node', function () {
                 getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpProxyAgent)
 
                 env.mqttConnectStub.calledOnce.should.be.true()
-                const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+                const mqttConnectOptions = env.mqttConnectStub.args[0][0]
                 mqttConnectOptions.should.have.property('wsOptions').and.be.an.Object()
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpProxyAgent)
             })
@@ -350,7 +402,7 @@ describe('project-link node', function () {
                 getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpsProxyAgent)
 
                 env.mqttConnectStub.calledOnce.should.be.true()
-                const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+                const mqttConnectOptions = env.mqttConnectStub.args[0][0]
                 mqttConnectOptions.should.have.property('wsOptions').and.be.an.Object()
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpsProxyAgent)
             })
@@ -370,7 +422,7 @@ describe('project-link node', function () {
             NodeConstructor.call(inNode, { topic, project: PROJECT_ID, timeout: 1.5 })
 
             // Validate connect options
-            const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+            const mqttConnectOptions = env.mqttConnectStub.args[0][0]
             mqttConnectOptions.should.have.property('username', 'test-username')
             mqttConnectOptions.should.have.property('password', 'test-password')
             mqttConnectOptions.should.have.property('clientId', 'test-username:n')
@@ -691,7 +743,7 @@ describe('project-link node', function () {
             NodeConstructor.call(inNode, { topic, project: PROJECT_ID, timeout: 1.5 })
 
             // Validate connect options
-            const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+            const mqttConnectOptions = env.mqttConnectStub.args[0][0]
             mqttConnectOptions.should.have.property('username', 'test-username')
             mqttConnectOptions.should.have.property('password', 'test-password')
             mqttConnectOptions.should.have.property('clientId')
@@ -973,6 +1025,31 @@ describe('project-link node', function () {
             await flushPromises()
             node.status.calledWithMatch({ text: 'subscribe error' }).should.be.true()
             node.error.args[0][0].message.should.match(/not permitted/)
+        })
+
+        it('reports a subscribe error when mqtt.js returns the refusal as an error', async function () {
+            const env = setup()
+            asApplicationDevice(env)
+            stubInstances()
+            env.mqttStub.subscribe = sinon.fake((topic, _options, callback) => {
+                const err = new Error('Subscribe error: Not authorized')
+                err.code = 135
+                callback(err, [{ topic, qos: 135 }])
+            })
+            const { node } = createNode(env, 'project link in', { topic: 'direct/topic', broadcast: false })
+            await flushPromises()
+            node.status.calledWithMatch({ text: 'subscribe error' }).should.be.true()
+            node.error.args[0][0].message.should.match(/not permitted/)
+        })
+
+        it('reports other subscribe errors as they are', async function () {
+            const env = setup()
+            stubInstances()
+            env.mqttStub.subscribe = sinon.fake((_topic, _options, callback) => callback(new Error('Connection closed')))
+            const { node } = createNode(env, 'project link in', { topic: 'direct/topic', broadcast: false })
+            await flushPromises()
+            node.status.calledWithMatch({ text: 'subscribe error' }).should.be.true()
+            node.error.args[0][0].message.should.equal('Connection closed')
         })
 
         it('project link in unsubscribes a shared subscription when closed (HA)', async function () {
