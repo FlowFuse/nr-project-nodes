@@ -52,6 +52,13 @@ describe('instances API', function () {
             gotClient.get.callCount.should.equal(1)
         })
 
+        it('disables got retries', async function () {
+            gotClient.get.withArgs(targetsURL).resolves({ statusCode: 200, body: JSON.stringify(fakeTargets) })
+            const api = InstancesApi(gotClient, { forgeURL, teamID, token })
+            await api.getInstances(0)
+            gotClient.get.firstCall.args[1].should.have.property('retry', 0)
+        })
+
         it('caches the data', async function () {
             gotClient.get.withArgs(targetsURL).resolves({ statusCode: 200, body: JSON.stringify(fakeTargets) })
             const api = InstancesApi(gotClient, { forgeURL, teamID, token })
