@@ -830,26 +830,21 @@ module.exports = function (RED) {
                     connAck.returnCode = null
 
                     connecting = true
-                    // PROBLEM: ipv6 ws addresses cannot connect when the broker URL is passed to mqtt.js
-                    // INFO: mqtt.js parses the broker URL with `url.parse`, which drops the square brackets off an ipv6 hostname
-                    //       (mqtt.js reassembles the url using hostname + port so `ws://[::1]:8883` becomes `ws://::1:8883`)
-                    // INFO: WS src code uses `new URL` so when `mqtt.js` passes the reassembled IP `http://::1:8883`, it fails with error ERR_INVALID_URL
-                    // INFO: mqtt.js v5 ignores a `url.parse` object when options are also given (it connects to `mqtt://localhost:1883`)
-                    // SOLUTION: parse the URL with `new URL` and pass the broker address to mqtt.js as options
+                    // Why the broker URL is not passed to mqtt.js:
+                    // - mqtt.js parses it with `url.parse`, which removes the square brackets of an ipv6 hostname,
+                    //   so `ws://[::1]:8883` becomes the invalid URL `ws://::1:8883`
+                    // - mqtt.js v5 ignores a parsed URL object when options are also given, and connects to `mqtt://localhost:1883`
+                    // Instead, the URL is parsed here with `new URL` (which keeps the brackets) and passed to mqtt.js as options.
                     // SEE: https://github.com/mqttjs/MQTT.js/issues/1569
                     const brokerURL = RED.settings.flowforge.projectLink.broker.url || 'mqtt://localhost:1883'
                     const brokerAddress = new URL(brokerURL)
                     const protocol = brokerAddress.protocol.replace(/:$/, '')
-                    // `new URL` keeps the square brackets of an ipv6 hostname
                     const host = brokerAddress.hostname
                     const connectOptions = {
                         protocol,
-                        // INFO: ws/wss: mqtt.js builds a URL again (`ws://${hostname}:${port}${path}`), so an ipv6 address
-                        //       needs its brackets. Without them, `ws://::1:8883/` is an invalid URL
-                        // INFO: mqtt: mqtt.js passes the hostname unchanged to `net.createConnection({ host })`, which expects
-                        //       a bare IP or a DNS name. `[::1]` is not an IP, so it is looked up as a name and fails with ENOTFOUND
-                        // INFO: mqtts: as mqtt, and mqtt.js also sets the TLS servername to the hostname when it is not an IP,
-                        //       so `[::1]` would be sent as the servername
+                        // ws/wss build a URL from the hostname, so an ipv6 address keeps its brackets.
+                        // mqtt/mqtts pass the hostname to `net`/`tls`, which need the address without brackets
+                        // (`[::1]` is looked up as a DNS name and fails, and would be sent as the TLS servername)
                         hostname: protocol.startsWith('ws') || !host.startsWith('[') ? host : host.slice(1, -1),
                         port: brokerAddress.port ? Number(brokerAddress.port) : undefined, // mqtt.js uses the protocol's default port when not set
                         path: brokerAddress.pathname + brokerAddress.search
