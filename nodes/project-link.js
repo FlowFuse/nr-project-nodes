@@ -840,11 +840,13 @@ module.exports = function (RED) {
                     const brokerURL = RED.settings.flowforge.projectLink.broker.url || 'mqtt://localhost:1883'
                     const brokerAddress = new URL(brokerURL)
                     const protocol = brokerAddress.protocol.replace(/:$/, '')
+                    // `new URL` keeps the square brackets of an ipv6 hostname
+                    const host = brokerAddress.hostname
                     const connectOptions = {
                         protocol,
                         // ws/wss build a URL from the hostname, so an ipv6 address needs its brackets.
                         // mqtt/mqtts pass it to `net`/`tls`, which need them removed
-                        hostname: protocol.startsWith('ws') ? brokerAddress.hostname : brokerAddress.hostname.replace(/^\[|\]$/g, ''),
+                        hostname: protocol.startsWith('ws') || !host.startsWith('[') ? host : host.slice(1, -1),
                         port: brokerAddress.port ? Number(brokerAddress.port) : undefined, // mqtt.js uses the protocol's default port when not set
                         path: brokerAddress.pathname + brokerAddress.search
                     }
