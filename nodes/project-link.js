@@ -830,17 +830,23 @@ module.exports = function (RED) {
                     connAck.returnCode = null
 
                     connecting = true
-                    // PROBLEM: ipv6 ws addresses cannot connect
+                    // PROBLEM: ipv6 ws addresses cannot connect when the broker URL is passed to mqtt.js
                     // INFO: mqtt.js parses the broker URL with `url.parse`, which drops the square brackets off an ipv6 hostname
                     //       (mqtt.js reassembles the url using hostname + port so `ws://[::1]:8883` becomes `ws://::1:8883`)
                     // INFO: WS src code uses `new URL` so when `mqtt.js` passes the reassembled IP `http://::1:8883`, it fails with error ERR_INVALID_URL
-                    // INFO: options take precedence over the parsed URL, so the hostname from `new URL` (which keeps the brackets) is used
-                    // INFO: only for ws/wss: mqtt/mqtts pass the hostname to `net`/`tls`, which need it without the brackets
+                    // INFO: mqtt.js v5 ignores a `url.parse` object when options are also given (it connects to `mqtt://localhost:1883`)
+                    // SOLUTION: parse the URL with `new URL` and pass the broker address to mqtt.js as options
                     // SEE: https://github.com/mqttjs/MQTT.js/issues/1569
                     const brokerURL = RED.settings.flowforge.projectLink.broker.url || 'mqtt://localhost:1883'
                     const brokerAddress = new URL(brokerURL)
-                    if (brokerAddress.protocol.startsWith('ws')) {
-                        options.hostname = brokerAddress.hostname
+                    const protocol = brokerAddress.protocol.replace(/:$/, '')
+                    const connectOptions = {
+                        protocol,
+                        // ws/wss build a URL from the hostname, so an ipv6 address needs its brackets.
+                        // mqtt/mqtts pass it to `net`/`tls`, which need them removed
+                        hostname: protocol.startsWith('ws') ? brokerAddress.hostname : brokerAddress.hostname.replace(/^\[|\]$/g, ''),
+                        port: brokerAddress.port ? Number(brokerAddress.port) : undefined, // mqtt.js uses the protocol's default port when not set
+                        path: brokerAddress.pathname + brokerAddress.search
                     }
 
                     // wsOptions.agent is expected to be an HTTP or HTTPS agent based on the request protocol
@@ -850,7 +856,7 @@ module.exports = function (RED) {
                         }
                     }
 
-                    client = MQTT.connect(brokerURL, options)
+                    client = MQTT.connect(Object.assign({}, connectOptions, options))
                     clients.push(client) // add to clients array for containment and auto cleanup of multiple clients
                     on('connect', onConnect)
                     on('error', onError)

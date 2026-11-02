@@ -256,7 +256,7 @@ describe('project-link node', function () {
 
                 spy.calledOnce.should.be.true()
                 env.mqttConnectStub.calledOnce.should.be.true()
-                const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+                const mqttConnectOptions = env.mqttConnectStub.args[0][0]
                 should(mqttConnectOptions.wsOptions?.agent).be.null()
             })
             it('should connect to the broker URL', function () {
@@ -265,23 +265,50 @@ describe('project-link node', function () {
                 const NodeConstructor = env.nodes['project link in'].NodeConstructor
                 NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
                 env.mqttConnectStub.calledOnce.should.be.true()
-                env.mqttConnectStub.args[0][0].should.equal('wss://broker.testfuse.com:8443/mqtt')
-                env.mqttConnectStub.args[0][1].should.have.property('hostname', 'broker.testfuse.com')
+                const connectOptions = env.mqttConnectStub.args[0][0]
+                connectOptions.should.have.property('protocol', 'wss')
+                connectOptions.should.have.property('hostname', 'broker.testfuse.com')
+                connectOptions.should.have.property('port', 8443)
+                connectOptions.should.have.property('path', '/mqtt')
             })
-            it('should keep the brackets of an ipv6 broker hostname', function () {
+            it('should keep the path and query of the broker URL', function () {
+                const env = setup({ mqttUrl: 'ws://broker.testfuse.com/some/path?x=1' })
+                projectLinkPackage(env.RED)
+                const NodeConstructor = env.nodes['project link in'].NodeConstructor
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
+                env.mqttConnectStub.calledOnce.should.be.true()
+                const connectOptions = env.mqttConnectStub.args[0][0]
+                connectOptions.should.have.property('path', '/some/path?x=1')
+            })
+            it('should leave the port unset when the broker URL has none', function () {
+                const env = setup({ mqttUrl: 'wss://broker.testfuse.com' })
+                projectLinkPackage(env.RED)
+                const NodeConstructor = env.nodes['project link in'].NodeConstructor
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
+                env.mqttConnectStub.calledOnce.should.be.true()
+                const connectOptions = env.mqttConnectStub.args[0][0]
+                connectOptions.should.have.property('port', undefined)
+            })
+            it('should keep the brackets of an ipv6 ws broker hostname', function () {
                 const env = setup({ mqttUrl: 'ws://[::1]:8883' })
                 projectLinkPackage(env.RED)
                 const NodeConstructor = env.nodes['project link in'].NodeConstructor
                 NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
-                env.mqttConnectStub.args[0][1].should.have.property('hostname', '[::1]')
+                env.mqttConnectStub.calledOnce.should.be.true()
+                const connectOptions = env.mqttConnectStub.args[0][0]
+                connectOptions.should.have.property('hostname', '[::1]')
+                connectOptions.should.have.property('port', 8883)
             })
-            it('should leave the hostname of an ipv6 mqtt broker to mqtt.js', function () {
+            it('should remove the brackets of an ipv6 mqtt broker hostname', function () {
                 const env = setup({ mqttUrl: 'mqtt://[::1]:1883' })
                 projectLinkPackage(env.RED)
                 const NodeConstructor = env.nodes['project link in'].NodeConstructor
                 NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
-                env.mqttConnectStub.args[0][0].should.equal('mqtt://[::1]:1883')
-                env.mqttConnectStub.args[0][1].should.not.have.property('hostname')
+                env.mqttConnectStub.calledOnce.should.be.true()
+                const connectOptions = env.mqttConnectStub.args[0][0]
+                connectOptions.should.have.property('protocol', 'mqtt')
+                connectOptions.should.have.property('hostname', '::1')
+                connectOptions.should.have.property('port', 1883)
             })
             it('should add http proxy to MQTT if env vars are set', function () {
                 const env = setup({
@@ -303,7 +330,7 @@ describe('project-link node', function () {
                 getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpProxyAgent)
 
                 env.mqttConnectStub.calledOnce.should.be.true()
-                const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+                const mqttConnectOptions = env.mqttConnectStub.args[0][0]
                 mqttConnectOptions.should.have.property('wsOptions').and.be.an.Object()
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpProxyAgent)
             })
@@ -327,7 +354,7 @@ describe('project-link node', function () {
                 getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpsProxyAgent)
 
                 env.mqttConnectStub.calledOnce.should.be.true()
-                const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+                const mqttConnectOptions = env.mqttConnectStub.args[0][0]
                 mqttConnectOptions.should.have.property('wsOptions').and.be.an.Object()
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpsProxyAgent)
             })
@@ -351,7 +378,7 @@ describe('project-link node', function () {
                 getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpProxyAgent)
 
                 env.mqttConnectStub.calledOnce.should.be.true()
-                const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+                const mqttConnectOptions = env.mqttConnectStub.args[0][0]
                 mqttConnectOptions.should.have.property('wsOptions').and.be.an.Object()
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpProxyAgent)
             })
@@ -375,7 +402,7 @@ describe('project-link node', function () {
                 getWSProxyAgentReturnValue.should.be.an.instanceOf(HttpsProxyAgent)
 
                 env.mqttConnectStub.calledOnce.should.be.true()
-                const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+                const mqttConnectOptions = env.mqttConnectStub.args[0][0]
                 mqttConnectOptions.should.have.property('wsOptions').and.be.an.Object()
                 mqttConnectOptions.wsOptions.should.have.property('agent').and.be.an.instanceOf(HttpsProxyAgent)
             })
@@ -395,7 +422,7 @@ describe('project-link node', function () {
             NodeConstructor.call(inNode, { topic, project: PROJECT_ID, timeout: 1.5 })
 
             // Validate connect options
-            const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+            const mqttConnectOptions = env.mqttConnectStub.args[0][0]
             mqttConnectOptions.should.have.property('username', 'test-username')
             mqttConnectOptions.should.have.property('password', 'test-password')
             mqttConnectOptions.should.have.property('clientId', 'test-username:n')
@@ -716,7 +743,7 @@ describe('project-link node', function () {
             NodeConstructor.call(inNode, { topic, project: PROJECT_ID, timeout: 1.5 })
 
             // Validate connect options
-            const mqttConnectOptions = env.mqttConnectStub.args[0][1]
+            const mqttConnectOptions = env.mqttConnectStub.args[0][0]
             mqttConnectOptions.should.have.property('username', 'test-username')
             mqttConnectOptions.should.have.property('password', 'test-password')
             mqttConnectOptions.should.have.property('clientId')
