@@ -857,7 +857,8 @@ module.exports = function (RED) {
                         }
                     }
 
-                    client = MQTT.connect(Object.assign({}, connectOptions, options))
+                    const mqttOptions = Object.assign({}, connectOptions, options)
+                    client = MQTT.connect(mqttOptions)
                     clients.push(client) // add to clients array for containment and auto cleanup of multiple clients
                     on('connect', onConnect)
                     on('error', onError)
