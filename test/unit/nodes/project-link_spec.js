@@ -275,6 +275,14 @@ describe('project-link node', function () {
                 NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
                 env.mqttConnectStub.args[0][1].should.have.property('hostname', '[::1]')
             })
+            it('should leave the hostname of an ipv6 mqtt broker to mqtt.js', function () {
+                const env = setup({ mqttUrl: 'mqtt://[::1]:1883' })
+                projectLinkPackage(env.RED)
+                const NodeConstructor = env.nodes['project link in'].NodeConstructor
+                NodeConstructor.call(baseNode, { topic: 'ff/v1/0A1B2C3D4F/p/00001111-1234-5678-9012-9876abcdef12/out/test/test', timeout: 1.5 })
+                env.mqttConnectStub.args[0][0].should.equal('mqtt://[::1]:1883')
+                env.mqttConnectStub.args[0][1].should.not.have.property('hostname')
+            })
             it('should add http proxy to MQTT if env vars are set', function () {
                 const env = setup({
                     httpProxy: 'http://localhost:3128',

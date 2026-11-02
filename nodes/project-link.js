@@ -835,9 +835,13 @@ module.exports = function (RED) {
                     //       (mqtt.js reassembles the url using hostname + port so `ws://[::1]:8883` becomes `ws://::1:8883`)
                     // INFO: WS src code uses `new URL` so when `mqtt.js` passes the reassembled IP `http://::1:8883`, it fails with error ERR_INVALID_URL
                     // INFO: options take precedence over the parsed URL, so the hostname from `new URL` (which keeps the brackets) is used
+                    // INFO: only for ws/wss: mqtt/mqtts pass the hostname to `net`/`tls`, which need it without the brackets
                     // SEE: https://github.com/mqttjs/MQTT.js/issues/1569
                     const brokerURL = RED.settings.flowforge.projectLink.broker.url || 'mqtt://localhost:1883'
-                    options.hostname = new URL(brokerURL).hostname
+                    const brokerAddress = new URL(brokerURL)
+                    if (brokerAddress.protocol.startsWith('ws')) {
+                        options.hostname = brokerAddress.hostname
+                    }
 
                     // wsOptions.agent is expected to be an HTTP or HTTPS agent based on the request protocol
                     if (process.env.all_proxy || process.env.http_proxy || process.env.https_proxy) {
