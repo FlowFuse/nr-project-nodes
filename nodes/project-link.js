@@ -11,7 +11,6 @@ module.exports = function (RED) {
     const os = require('os')
     const { default: GOT } = require('got')
     const MQTT = require('mqtt')
-    const urlModule = require('url')
     const utils = require('../lib/utils.js')
     const InstancesApi = require('../lib/InstancesApi.js').InstancesApi
     const { isValidSubscriptionTopic, isValidPublishTopic } = require('../lib/topics.js')
@@ -666,12 +665,12 @@ module.exports = function (RED) {
                         try {
                             // console.log(`SUB ${topic}`)
                             client.subscribe(topic, subOptions, (err, granted) => {
-                                if (err) {
-                                    reject(err)
-                                } else if (granted?.some(g => g.qos >= 128)) {
+                                if (err?.code >= 128 || granted?.some(g => g.qos >= 128)) {
                                     // the broker refused the subscription. This can happen when the
                                     // FlowFuse platform does not support the selected option
                                     reject(new Error('Subscription not permitted by the FlowFuse platform'))
+                                } else if (err) {
+                                    reject(err)
                                 } else {
                                     resolve(true)
                                 }
@@ -832,17 +831,13 @@ module.exports = function (RED) {
 
                     connecting = true
                     // PROBLEM: ipv6 ws addresses cannot connect
-                    // INFO: Calling mqtt.connect('http://[::1]:8883') fails with error  ERR_INVALID_URL
-                    // INFO: Calling mqtt.connect(new URL('http://[::1]:8883')) fails because `connect` only accepts a `string` or `url.parse` object
-                    // INFO: Calling mqtt.connect(url.parse('http://[::1]:8883') fails because unlike new URL, url.parse drops the square brackets off hostname
-                    //       (mqtt.js disassembles and reassembles the url using hostname + port so `ws://[::1]:8883` becomes `ws://::1:8883`)
+                    // INFO: mqtt.js parses the broker URL with `url.parse`, which drops the square brackets off an ipv6 hostname
+                    //       (mqtt.js reassembles the url using hostname + port so `ws://[::1]:8883` becomes `ws://::1:8883`)
                     // INFO: WS src code uses `new URL` so when `mqtt.js` passes the reassembled IP `http://::1:8883`, it fails with error ERR_INVALID_URL
+                    // INFO: options take precedence over the parsed URL, so the hostname from `new URL` (which keeps the brackets) is used
                     // SEE: https://github.com/mqttjs/MQTT.js/issues/1569
                     const brokerURL = RED.settings.flowforge.projectLink.broker.url || 'mqtt://localhost:1883'
-                    // eslint-disable-next-line n/no-deprecated-api
-                    const parsedURL = urlModule.parse(brokerURL)
-                    const newURL = new URL(brokerURL)
-                    parsedURL.hostname = newURL.hostname
+                    options.hostname = new URL(brokerURL).hostname
 
                     // wsOptions.agent is expected to be an HTTP or HTTPS agent based on the request protocol
                     if (process.env.all_proxy || process.env.http_proxy || process.env.https_proxy) {
@@ -851,7 +846,7 @@ module.exports = function (RED) {
                         }
                     }
 
-                    client = MQTT.connect(parsedURL, options)
+                    client = MQTT.connect(brokerURL, options)
                     clients.push(client) // add to clients array for containment and auto cleanup of multiple clients
                     on('connect', onConnect)
                     on('error', onError)
