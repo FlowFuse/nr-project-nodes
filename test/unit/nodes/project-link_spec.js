@@ -440,6 +440,37 @@ describe('project-link node', function () {
             should(pubOptions).be.an.Object()
             pubOptions.should.have.property('qos').and.equal(2)
         })
+        it('project link call should ignore responses without correlation data', async function () {
+            const env = setup()
+            const RED = env.RED
+            const nodeEvents = {}
+            const callNode = {
+                on: (event, cb) => {
+                    nodeEvents[event] = cb
+                },
+                error: sinon.fake(),
+                type: 'project link call'
+            }
+            InstancesApi.InstancesApi = sinon.stub().returns({
+                getInstances: sinon.stub().resolves({ count: 1, instances: [{ id: PROJECT_ID, name: 'A-PROJECT' }] })
+            })
+            const topic = 'cloud/project-nodes-test/call'
+            projectLinkPackage(RED)
+            const NodeConstructor = env.nodes['project link call'].NodeConstructor
+            NodeConstructor.call(callNode, { topic, project: PROJECT_ID, timeout: 0.05 })
+            const send = sinon.fake()
+            const done = sinon.fake()
+            nodeEvents.input({ payload: 'test' }, send, done)
+
+            const onMessage = env.mqttStub.on.args.find(args => args[0] === 'message')[1]
+            const responseTopic = `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/${topic}`
+            const message = Buffer.from(JSON.stringify({ payload: 'response' }))
+            should.doesNotThrow(() => onMessage(responseTopic, message, { properties: {} }))
+            should.doesNotThrow(() => onMessage(responseTopic, message, {}))
+
+            send.called.should.be.false()
+            done.called.should.be.false()
+        })
         it('project link call should name the target and topic when a call times out', async function () {
             const env = setup()
             const RED = env.RED

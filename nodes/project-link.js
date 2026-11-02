@@ -1255,8 +1255,8 @@ module.exports = function (RED) {
                 node.error(err, msg)
                 return
             }
-            const eventId = packet.properties && packet.properties.correlationData.toString()
-            if (messageEvents[eventId]) {
+            const eventId = packet?.properties?.correlationData?.toString()
+            if (eventId && messageEvents[eventId]) {
                 node.returnLinkMessage(eventId, msg)
             }
         }
