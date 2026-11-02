@@ -15,6 +15,14 @@
     #dialog-form select > option.ff-project-link-bad-option {
         color: var(--red-ui-text-color-error, red);
     }
+    /* line the tip up with the inputs above it. Width is relative to the row (like the inputs),
+       never a fixed or minimum width, so the edit tray can still be made narrower */
+    #dialog-form > div.form-row.ff-project-link-tip-row > .form-tips {
+        margin-left: 105px;
+        width: calc(100% - 125px);
+        max-width: none;
+        box-sizing: border-box;
+    }
 </style>
 
 <script type="text/html" data-template-name="project link in">
@@ -33,13 +41,27 @@
         <label><span>&nbsp</span></label>
         <span class="ff-project-link-group-option">
             <input type="radio" id="ff-project-link-radio-input-broadcast" name="ff-project-link-broadcast" value="true" />
-            <label for="ff-project-link-radio-input-broadcast">Listen for broadcast messages from</label>
+            <label for="ff-project-link-radio-input-broadcast">Listen for broadcast messages</label>
         </span>
     </div>
-    <div class="form-row ff-project-link-list-row">
-        <label><span>&nbsp</span></label>
+    <div class="form-row ff-project-link-scope-row">
+        <label for="node-input-scope"><i class="fa fa-bullhorn"></i> <span>Channel</span></label>
+        <select id="node-input-scope" class="ff-project-link-input-width">
+            <option value="team">Team broadcasts</option>
+            <option value="application">Application broadcasts</option>
+        </select>
+    </div>
+    <div class="form-row ff-project-link-filter-row">
+        <label for="ff-project-link-application-filter"><i class="fa fa-cubes"></i> <span>Application</span></label>
+        <select id="ff-project-link-application-filter" class="ff-project-link-input-width"></select>
+    </div>
+    <div class="form-row ff-project-link-target-row">
+        <label for="node-input-projectList"><i class="fa fa-cube"></i> <span>From</span></label>
         <select id="node-input-projectList" class="ff-project-link-input-width" disabled>
         </select>
+    </div>
+    <div class="form-row ff-project-link-tip-row">
+        <div class="form-tips" id="ff-project-link-scope-tip"></div>
     </div>
     <div class="form-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Topic</span></label>
@@ -67,8 +89,12 @@
             <label for="ff-project-link-radio-input-direct">Send message to instance</label>
         </span>
     </div>
-    <div class="form-row ff-project-link-list-row">
-        <label><span>&nbsp</span></label>
+    <div class="form-row ff-project-link-filter-row">
+        <label for="ff-project-link-application-filter"><i class="fa fa-cubes"></i> <span>Application</span></label>
+        <select id="ff-project-link-application-filter" class="ff-project-link-input-width"></select>
+    </div>
+    <div class="form-row ff-project-link-target-row">
+        <label for="node-input-projectList"><i class="fa fa-cube"></i> <span>Instance</span></label>
         <select id="node-input-projectList" class="ff-project-link-input-width" disabled>
         </select>
     </div>
@@ -78,6 +104,16 @@
             <input type="radio" id="ff-project-link-radio-input-broadcast" name="ff-project-link-broadcast" value="true" />
             <label for="ff-project-link-radio-input-broadcast">Broadcast message</label>
         </span>
+    </div>
+    <div class="form-row ff-project-link-scope-row">
+        <label for="node-input-scope"><i class="fa fa-bullhorn"></i> <span>Channel</span></label>
+        <select id="node-input-scope" class="ff-project-link-input-width">
+            <option value="team">Team broadcast</option>
+            <option value="application">Application broadcast</option>
+        </select>
+    </div>
+    <div class="form-row ff-project-link-tip-row">
+        <div class="form-tips" id="ff-project-link-scope-tip"></div>
     </div>
     <div class="form-row ff-project-link-topic-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Topic</span></label>
@@ -94,7 +130,11 @@
         <input type="text" id="node-input-timeout" placeholder="30" style="width: 80px; margin-right: 5px;">
         <span data-i18n="inject.seconds">sec</span>
     </div>
-    <div class="form-row">
+    <div class="form-row ff-project-link-filter-row">
+        <label for="ff-project-link-application-filter"><i class="fa fa-cubes"></i> <span>Application</span></label>
+        <select id="ff-project-link-application-filter" class="ff-project-link-input-width"></select>
+    </div>
+    <div class="form-row ff-project-link-target-row">
         <label for="node-input-projectList"><i class="fa fa-sign-out"></i> <span>Target</span></label>
         <select id="node-input-projectList" class="ff-project-link-input-width">
         </select>
@@ -108,6 +148,15 @@
 <script type="text/javascript">
 /* global RED, $ */
 (function () {
+    const SCOPE_TEAM = 'team'
+    const SCOPE_APPLICATION = 'application'
+    // Application broadcasts are saved as `broadcast: 'application'` rather than `true` on project link
+    // in and out nodes. Older versions of these nodes ignore `scope`, so `true` would make them send or
+    // listen for team broadcasts. They treat this value as not a broadcast instead: an out node sends
+    // nothing (a broadcast is saved without a target) and an in node only listens for messages sent
+    // directly to this instance.
+    const BROADCAST_APPLICATION = 'application'
+
     /**
      * Test a topic string is valid for subscription...
      * * Must not contain the following characters: + # $ \
@@ -130,9 +179,24 @@
         return /^(?:(?:[^/$+#\b\f\n\r\t\v\0]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0]+?))*)$/.test(subTopic)
     }
 
-    function isValidProject (projectId) {
+    /** Compare names for sorting, ignoring case (and treating numbers by value) */
+    function compareNames (a, b) {
+        return (a || '').localeCompare(b || '', undefined, { sensitivity: 'base', numeric: true })
+    }
+
+    /**
+     * Validate the selected instance
+     * @param {string} projectId - the selected instance id (or `all`)
+     * @param {object} [opt] - passed by Node-RED when it wants a reason, returned as the validation message
+     * @returns {boolean|string} `true` if valid, otherwise `false` (or the reason when `opt` is given)
+     */
+    function isValidProject (projectId, opt) {
+        const invalid = (reason) => opt ? reason : false
         // this is a simple check to see if the selected option has class ff-project-link-bad-option
         const projectList = $('#node-input-projectList')
+        if (!projectId) {
+            return invalid('No instance selected')
+        }
         if (projectId === 'all') {
             return true // broadcast to all is a valid option
         }
@@ -143,87 +207,266 @@
         if (projectList.prop('disabled')) {
             return true
         }
-        return !projectList.find('.ff-project-link-bad-option').is(':selected')
+        if (projectList.find('.ff-project-link-bad-option').is(':selected')) {
+            return invalid('Selected instance not found in FlowFuse')
+        }
+        return true
     }
 
     function onEditPrepare (node, targetType) {
-        let isBroadcast = node.broadcast === true
+        const nodeType = targetType || node.type
+        let isBroadcast = node.broadcast === true || node.broadcast === 'true' || node.broadcast === BROADCAST_APPLICATION
         let isReturnMode = node.mode === 'return'
+        let scope = (node.scope === SCOPE_APPLICATION || node.broadcast === BROADCAST_APPLICATION) ? SCOPE_APPLICATION : SCOPE_TEAM
+        let selected = node.project
+        /** Target data from the runtime. `null` until loaded */
+        let data = null
+
+        const projectList = $('#node-input-projectList')
+        const applicationFilter = $('#ff-project-link-application-filter')
 
         // Initialise UI state according to node state
-        loadProjectList('#node-input-projectList', node.project, targetType || node.type)
         $('#node-input-name').val(node.name)
         $('#node-input-topic').val(node.topic)
         $('#node-input-timeout').val(node.timeout)
         $('#node-input-mode').val(node.mode)
+        $('#node-input-scope').val(scope)
         $('input:radio[name="ff-project-link-broadcast"]').val([isBroadcast.toString()])
 
         // watch for switch between broadcast and p2p
         $('input:radio[name="ff-project-link-broadcast"]').on('change', function (e) {
             isBroadcast = e.target.value === 'true'
+            renderProjectList()
             updateUI()
         })
 
         // watch for switch between out and return mode
-        if (node.type === 'project link out') {
+        if (nodeType === 'project link out') {
             $('#node-input-mode').on('change', function (e) {
                 isReturnMode = e.target.value === 'return'
                 updateUI()
             })
         }
 
-        // watch for target project selection change
-        $('#node-input-projectList').on('change', function (e) {
-            console.debug('Project link project selection changed', e.target.value)
+        // watch for switch between team and application broadcasts
+        $('#node-input-scope').on('change', function (e) {
+            scope = e.target.value === SCOPE_APPLICATION ? SCOPE_APPLICATION : SCOPE_TEAM
+            renderProjectList()
             updateUI()
         })
 
+        // watch for application filter changes
+        applicationFilter.on('change', function () {
+            renderProjectList()
+            updateUI()
+        })
+
+        // watch for target project selection change
+        projectList.on('change', function (e) {
+            selected = e.target.value
+            updateUI()
+        })
+
+        // if the list fails to load, we still want the original value set in the selector
+        // so that if the user clicks Done (or the workspace) the same value is
+        // re-entered preventing loss or change of original value
+        if (selected) {
+            projectList.append(new Option(selected, selected, false, true))
+        }
+        projectList.prop('disabled', true)
+        $.ajax({
+            url: 'nr-project-link/projects',
+            type: 'GET',
+            datatype: 'json'
+        })
+            .done(function (result) {
+                data = result || {}
+                loadApplicationFilter()
+                renderProjectList()
+                updateUI()
+            })
+            .fail(function (jqXHR, textStatus, errorThrown) {
+                console.error(jqXHR, textStatus, errorThrown)
+                updateUI()
+            })
+
         updateUI()
 
+        function supportsApplications () {
+            return !!data?.supportsApplications
+        }
+
+        function isApplicationScope () {
+            return supportsApplications() && scope === SCOPE_APPLICATION
+        }
+
+        /**
+         * Get the applications sorted by name (ignoring case). Applications can share a name,
+         * so those are labelled with their id to tell them apart
+         * @returns {Array<{id: string, name: string, label: string}>}
+         */
+        function getApplications () {
+            const applications = data.applications || []
+            const nameCount = {}
+            applications.forEach(application => { nameCount[application.name] = (nameCount[application.name] || 0) + 1 })
+            return applications
+                .map(application => ({ ...application, label: nameCount[application.name] > 1 ? `${application.name} (${application.id})` : application.name }))
+                .sort((a, b) => compareNames(a.label, b.label))
+        }
+
+        function loadApplicationFilter () {
+            applicationFilter.empty()
+            applicationFilter.append(new Option('All applications', '', false, true))
+            const selectedItem = (data.instances || []).find(item => item.id === selected)
+            for (const application of getApplications()) {
+                applicationFilter.append(new Option(application.label, application.id, false, selectedItem?.applicationId === application.id))
+            }
+        }
+
+        function renderProjectList () {
+            if (!data) {
+                return
+            }
+            projectList.empty()
+            const instances = data.instances || []
+
+            /** @type {Array<{label: string|null, items: Array}>} */
+            let groups
+            if (!supportsApplications()) {
+                // older platforms do not provide applications - show a flat list
+                groups = [{ label: null, items: instances }]
+            } else {
+                let applications = getApplications()
+                if (nodeType === 'project link in' && isBroadcast && isApplicationScope()) {
+                    // application broadcasts can only come from this application
+                    applications = applications.filter(a => a.id === data.ownApplicationId)
+                } else if (applicationFilter.val()) {
+                    applications = applications.filter(a => a.id === applicationFilter.val())
+                }
+                groups = applications.map(application => {
+                    return {
+                        label: application.label,
+                        items: instances.filter(item => item.applicationId === application.id).sort((a, b) => compareNames(a.name, b.name))
+                    }
+                })
+            }
+
+            const matched = (nodeType === 'project link in' && selected === 'all') || instances.some(item => item.id === selected)
+            if (selected && !matched) {
+                // if the value is not in the list, add it as an option
+                projectList.append($('<option>', { class: 'ff-project-link-bad-option', value: selected, text: selected }))
+            }
+
+            // broadcast not permitted in link call at this time but has been
+            // considered in the code base - possible future iteration
+            if (nodeType === 'project link in') {
+                let allLabel = 'all instances and remote instances'
+                if (supportsApplications()) {
+                    allLabel = isApplicationScope() ? 'All instances in this application' : 'All instances in this team'
+                }
+                projectList.append(new Option(allLabel, 'all', false, selected === 'all'))
+            }
+
+            for (const group of groups) {
+                let parent = projectList
+                if (group.label !== null) {
+                    if (!group.items.length) {
+                        continue
+                    }
+                    parent = $('<optgroup>', { label: group.label }).appendTo(projectList)
+                }
+                for (const item of group.items) {
+                    const text = item.type === 'device' ? `${item.name} (remote)` : item.name
+                    parent.append(new Option(text, item.id, false, item.id === selected))
+                }
+            }
+            // If nothing in the list is selected (no target yet, or it was filtered out), show a
+            // placeholder rather than let the browser silently select the first entry
+            const hasSelection = !!selected && projectList.find('option').filter((_i, option) => option.value === selected).length > 0
+            if (!hasSelection) {
+                const placeholder = projectList.find('option').length ? 'Select an instance' : 'No instances to select'
+                projectList.prepend($('<option>', { value: '', text: placeholder, disabled: true, selected: true }))
+            }
+            // keep track of what is now selected (empty if the previous selection is filtered out)
+            selected = projectList.val() || ''
+        }
+
         function updateUI () {
-            if (node.type === 'project link out' && isReturnMode) {
+            const showApplications = supportsApplications()
+            const filterRow = $('.ff-project-link-filter-row')
+            const targetRow = $('.ff-project-link-target-row')
+            const scopeRow = $('.ff-project-link-scope-row')
+            const tipRow = $('.ff-project-link-tip-row')
+            let tip = ''
+
+            if (nodeType === 'project link out' && isReturnMode) {
                 $('.ff-project-link-topic-row').hide()
                 $('.ff-project-link-list-row').hide()
-                $('#node-input-projectList').prop('disabled', true)
-            } else if (node.type === 'project link out') {
+                filterRow.hide()
+                targetRow.hide()
+                scopeRow.hide()
+                projectList.prop('disabled', true)
+            } else if (nodeType === 'project link out') {
                 $('.ff-project-link-topic-row').show()
                 $('.ff-project-link-list-row').show()
-                $('#node-input-projectList').prop('disabled', isBroadcast ? true : null)
-            } else if (node.type === 'project link in') {
-                // NOTE: Remote instances assigned to an application do not support direct messaging, therefore
-                // don't permit "Receive messages sent to this instance" on the project-in node
-                // when settings.RED.settings.ownerType is "application"
+                filterRow.toggle(!isBroadcast && showApplications)
+                targetRow.toggle(!isBroadcast)
+                scopeRow.toggle(isBroadcast && showApplications)
+                projectList.prop('disabled', isBroadcast ? true : (data ? null : true))
+                if (isBroadcast && showApplications) {
+                    tip = isApplicationScope()
+                        ? 'Only instances in this application that listen for <b>application</b> broadcasts will receive the message.'
+                        : 'Any instance in this team that listens for <b>team</b> broadcasts can receive the message.'
+                }
+            } else if (nodeType === 'project link in') {
                 const directOptionParent = $('#ff-project-link-radio-input-direct').parent()
-                if (RED.settings.projectLinkInNode_ownerType === 'application') {
-                    // update the label to reflect the fact that direct messaging is not supported
+                if (data && !showApplications && RED.settings.projectLinkInNode_ownerType === 'application') {
+                    // NOTE: On older platforms, remote instances assigned to an application do not support direct
+                    // messaging, therefore don't permit "Receive messages sent to this instance"
                     directOptionParent.children('label').text('Receive messages sent to this remote instance')
                     RED.popover.tooltip(directOptionParent.children(), 'Not supported for a remote instance assigned to an application: use broadcast instead')
                     directOptionParent.children().prop('disabled', true)
                     directOptionParent.children().addClass('disabled')
-                    isBroadcast = true
+                    if (!isBroadcast) {
+                        isBroadcast = true
+                        $('input:radio[name="ff-project-link-broadcast"]').val(['true'])
+                    }
                 }
                 $('.ff-project-link-topic-row').show()
                 $('.ff-project-link-list-row').show()
-                $('#node-input-projectList').prop('disabled', isBroadcast ? null : true)
+                scopeRow.toggle(isBroadcast && showApplications)
+                filterRow.toggle(isBroadcast && showApplications && !isApplicationScope())
+                targetRow.toggle(isBroadcast)
+                projectList.prop('disabled', isBroadcast && data ? null : true)
+                if (isBroadcast && showApplications) {
+                    tip = isApplicationScope()
+                        ? 'Receives messages broadcast to <b>this application</b> by instances in this application.'
+                        : 'Receives messages broadcast to <b>the team</b>. Messages broadcast to an application are not received.'
+                }
             } else {
                 $('.ff-project-link-topic-row').show()
                 $('.ff-project-link-list-row').show()
-                $('#node-input-projectList').prop('disabled', null)
+                filterRow.toggle(showApplications)
+                targetRow.show()
+                projectList.prop('disabled', data ? null : true)
             }
 
-            if ($('#node-input-projectList').prop('disabled')) {
+            $('#ff-project-link-scope-tip').html(tip)
+            tipRow.toggle(!!tip)
+
+            if (projectList.prop('disabled')) {
                 // if the project list is disabled, we cannot select a bad option
-                $('#node-input-projectList').removeClass('input-error')
-            } else if ($('#node-input-projectList').length) {
+                projectList.removeClass('input-error')
+            } else if (projectList.length) {
                 // if the project list is enabled, we can select a bad option
-                const badEntryIsSelected = $('#node-input-projectList').find('.ff-project-link-bad-option').is(':selected')
-                $('#node-input-projectList').toggleClass('input-error', badEntryIsSelected)
+                const badEntryIsSelected = projectList.find('.ff-project-link-bad-option').is(':selected')
+                projectList.toggleClass('input-error', badEntryIsSelected)
             }
         }
     }
 
     function onEditSave (node) {
-        node.project = $('#node-input-projectList').val()
+        node.project = $('#node-input-projectList').val() || '' // val() is null when nothing can be selected
         node.name = $('#node-input-name').val()
         node.topic = $('#node-input-topic').val()
 
@@ -235,58 +478,15 @@
         }
         if (node.type === 'project link in' || node.type === 'project link out') {
             node.broadcast = $('input:radio[name="ff-project-link-broadcast"]:checked').val() === 'true'
-        }
-    }
-
-    function loadProjectList (selector, val, nodeType) {
-        const el = $(selector)
-        if (!el || !el.length) {
-            return
-        }
-        el.prop('disabled', true)
-        val = val || el.val()
-        // if ajax call fails, we still want the original value set in the selector
-        // so that if the user clicks Done (or the workspace) the same value is
-        // re-entered preventing loss or change of original value
-        if (val) {
-            /** @type {HTMLOptionsCollection} */ const options = el[0].options
-            if (!options || !options.length || options.selectedIndex < 0 || options.item(options.selectedIndex).value !== val) {
-                options.selectedIndex = -1
-                el.append(new Option(val, val, false, true))
+            node.scope = $('#node-input-scope').val() === SCOPE_APPLICATION ? SCOPE_APPLICATION : SCOPE_TEAM
+            if (node.type === 'project link out' && node.broadcast) {
+                // the target list is disabled while broadcasting but keeps its selection
+                node.project = ''
+            }
+            if (node.broadcast && node.scope === SCOPE_APPLICATION) {
+                node.broadcast = BROADCAST_APPLICATION
             }
         }
-        $.ajax({
-            url: 'nr-project-link/projects',
-            type: 'GET',
-            datatype: 'json'
-        })
-            .done(function (data) {
-                el.empty()
-
-                const instances = (data.count ? data.instances : null) || []
-                const matched = (nodeType === 'project link in' && val === 'all') || instances.some(item => item.id === val || item.name === val)
-                if (!matched) {
-                    // if the value is not in the list, add it as an option
-                    el.append($('<option>', { class: 'ff-project-link-bad-option', value: val, text: val }))
-                    el.addClass('input-error')
-                }
-
-                // broadcast not permitted in link call at this time but has been
-                // considered in the code base - possible future iteration
-                if (nodeType === 'project link in') {
-                    el.append(new Option('all instances and remote instances', 'all', false, val === 'all'))
-                }
-
-                for (let index = 0; index < instances.length; index++) {
-                    const item = instances[index]
-                    el.append(new Option(item.name, item.id, false, item.id === val))
-                }
-                $('input:radio[name="ff-project-link-broadcast"]:checked').trigger('change')
-            })
-            .fail(function (jqXHR, textStatus, errorThrown) {
-                $('input:radio[name="ff-project-link-broadcast"]:checked').trigger('change')
-                console.error(jqXHR, textStatus, errorThrown)
-            })
     }
 
     function onAdd () {
@@ -303,7 +503,7 @@
             name: { value: '_DEFAULT_' },
             project: {
                 value: '',
-                validate: function (v) {
+                validate: function (v, opt) {
                     if (this.broadcast === 'false' || this.broadcast === false) {
                         return true // don't need to validate project id if we are only receiving messages sent to this instance
                     }
@@ -311,10 +511,11 @@
                         return true // if we are listening for broadcast messages from all, we don't need a project id
                     }
                     // otherwise, we need a valid project id
-                    return v && isValidProject(v)
+                    return isValidProject(v, opt)
                 }
             },
             broadcast: { value: false, required: true },
+            scope: { value: SCOPE_TEAM }, // team || application (only used when broadcast is true)
             topic: { value: '', required: true, validate: isValidSubscriptionTopic }
         },
         inputs: 0,
@@ -347,17 +548,18 @@
             name: { value: '_DEFAULT_' },
             mode: { value: 'link' }, // link || return
             broadcast: { value: false, required: true },
+            scope: { value: SCOPE_TEAM }, // team || application (only used when broadcast is true)
             project: {
                 value: '',
-                validate: function (v) {
-                    if (this.broadcast === 'true' || this.broadcast === true) {
+                validate: function (v, opt) {
+                    if (this.broadcast === 'true' || this.broadcast === true || this.broadcast === BROADCAST_APPLICATION) {
                         return true // don't need to validate project id if we are broadcasting to all
                     }
                     if (this.mode === 'return') {
                         return true
                     }
                     // otherwise, we need a valid project id
-                    return v && isValidProject(v)
+                    return isValidProject(v, opt)
                 }
             },
             topic: {
@@ -411,7 +613,7 @@
         color: '#87D8CF',
         defaults: {
             name: { value: '' },
-            project: { value: '', required: true, validate: isValidProject },
+            project: { value: '', validate: isValidProject }, // isValidProject handles empty, so its reason is shown
             topic: { value: '', required: true, validate: isValidPublishTopic },
             timeout: {
                 value: '30',
@@ -452,11 +654,22 @@
        subscribers.</p>
     <p>The node does not support MQTT wildcard characters - a fully qualified topic
        must be used.</p>
+    <h3>Broadcast channels</h3>
+    <p>When listening for broadcast messages, choose the channel to listen on:</p>
+    <ul>
+        <li><b>Team broadcasts</b> - messages broadcast to the team by any instance or
+            remote instance in the team.</li>
+        <li><b>Application broadcasts</b> - messages broadcast to this instance's application by
+            instances and remote instances in the same application. Instances outside the application
+            cannot send or receive these messages.</li>
+    </ul>
+    <p>The two channels are separate: a team listener does not receive application broadcasts,
+       even from instances in the same application.</p>
+    <p>Messages can be received from all sources on the channel or from a specific instance or remote instance.</p>
     <h3>Limitations</h3>
-    <p>A specific source can only be another hosted instance in the same team. To
-       receive messages from remote instances, listen for broadcast messages instead.</p>
-    <p>A remote instance assigned to an application cannot be sent messages directly,
-       so it can only listen for broadcast messages.</p>
+    <p>Older versions of FlowFuse do not support application broadcasts, or remote instances
+       assigned to an application receiving messages sent directly to them. On those platforms,
+       a specific source can only be another hosted instance in the same team.</p>
     <h3>Output</h3>
     <dl class="message-properties">
         <dt><i>msg</i> <span class="property-type">object</span></dt>
@@ -472,7 +685,10 @@
                 <li><code>deviceId</code> - if present, the id of the remote instance that sent the message</li>
                 <li><code>deviceName</code> - if present, the name of the remote instance that sent the message</li>
                 <li><code>deviceType</code> - if present, the type of the remote instance that sent the message</li>
+                <li><code>applicationId</code> - the id of the application the sender belongs to</li>
                 <li><code>topic</code> - the topic the message was received on</li>
+                <li><code>scope</code> - for broadcast messages, the channel the message was broadcast on:
+                    <code>team</code> or <code>application</code></li>
                 <li><code>callStack</code> - when using the Project Call node, this contains
                  information about the call stack. This property must not be modified.</li>
             </ul>
@@ -487,9 +703,18 @@
     <p>
         It provides three modes of operation:
         <ul>
-            <li>send messages to another instance</li>
+            <li>send messages to another instance or remote instance</li>
             <li>broadcast messages to any instance or remote instance listening on the same topic</li>
             <li>return the message to its sender if it originated from a Project Call node</li>
+        </ul>
+    </p>
+    <p>
+        Broadcast messages can be sent on one of two channels:
+        <ul>
+            <li><b>Team broadcast</b> - received by any instance or remote instance in the team
+                listening for team broadcasts.</li>
+            <li><b>Application broadcast</b> - only received by instances and remote instances in this
+                application listening for application broadcasts.</li>
         </ul>
     </p>
     <p>
@@ -506,8 +731,11 @@
         node will be unable to respond properly.
     </p>
     <h3>Limitations</h3>
-    <p>Sending to a specific target only works for hosted instances in the same team.
-       To reach remote instances, broadcast on a topic instead.</p>
+    <p>A remote instance assigned to an instance cannot be targeted directly: send the message
+       to the instance it is assigned to.</p>
+    <p>Older versions of FlowFuse only permit sending to hosted instances, and do not
+       support application broadcasts. To reach remote instances on those platforms,
+       broadcast on a topic instead.</p>
     <h3>Input</h3>
     <dl class="message-properties">
         <dt><i>msg</i> <span class="property-type">object</span></dt>
@@ -540,8 +768,13 @@
     </p>
     <h3>Limitations</h3>
     <p>
-        The target must be a hosted instance in the same team. A remote instance can
-        make calls, but cannot receive them.
+        The target can be a hosted instance, or a remote instance assigned to an application,
+        in the same team. A remote instance assigned to an instance cannot be targeted directly:
+        call the instance it is assigned to.
+    </p>
+    <p>
+        Older versions of FlowFuse only permit calls to hosted instances. On those platforms,
+        a remote instance can make calls, but cannot receive them.
     </p>
     <p>
         The default timeout is 30 seconds. The target instance must be running and
@@ -563,6 +796,7 @@
                 <li><code>deviceId</code> - if present, the id of the remote instance that sent the message</li>
                 <li><code>deviceName</code> - if present, the name of the remote instance that sent the message</li>
                 <li><code>deviceType</code> - if present, the type of the remote instance that sent the message</li>
+                <li><code>applicationId</code> - the id of the application the sender belongs to</li>
                 <li><code>topic</code> - the topic the message was received on</li>
                 <li><code>callStack</code> - when using the Project Call node, this contains
                     information about the call stack. This property must not be modified.</li>

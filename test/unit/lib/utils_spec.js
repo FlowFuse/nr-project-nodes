@@ -217,4 +217,33 @@ describe('utils', () => {
             agent.https.connectOpts.should.have.property('timeout', 2345)
         })
     })
+
+    describe('getRetryDelay', function () {
+        const min = 30 * 1000
+        const max = 5 * 60 * 1000
+        const lowest = () => 0
+        const highest = () => 0.999999
+
+        it('starts at the minimum +/- 5 seconds', function () {
+            utils.getRetryDelay(0, min, max, lowest).should.equal(25 * 1000)
+            utils.getRetryDelay(0, min, max, highest).should.be.approximately(35 * 1000, 1)
+        })
+
+        it('doubles on each attempt with +/- 10% jitter', function () {
+            utils.getRetryDelay(1, min, max, lowest).should.equal(54 * 1000)
+            utils.getRetryDelay(2, min, max, highest).should.be.approximately(132 * 1000, 1)
+        })
+
+        it('backs off to the maximum +/- 10%', function () {
+            utils.getRetryDelay(4, min, max, lowest).should.equal(270 * 1000)
+            utils.getRetryDelay(20, min, max, highest).should.be.approximately(330 * 1000, 1)
+        })
+
+        it('stays within bounds with random jitter', function () {
+            for (let attempt = 0; attempt < 10; attempt++) {
+                const delay = utils.getRetryDelay(attempt, min, max)
+                delay.should.be.within(25 * 1000, 330 * 1000)
+            }
+        })
+    })
 })

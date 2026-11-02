@@ -14,12 +14,21 @@ module.exports = function (RED) {
     const urlModule = require('url')
     const utils = require('../lib/utils.js')
     const InstancesApi = require('../lib/InstancesApi.js').InstancesApi
+    const { isValidSubscriptionTopic, isValidPublishTopic } = require('../lib/topics.js')
 
     // Constants
     const API_VERSION = 'v1'
     const TOPIC_HEADER = 'ff'
     const TOPIC_VERSION = 'v1'
+    const TOPIC_TYPE_TEAM = 'p' // ff/v1/<team>/p/<instance|dev:device>/...
+    const TOPIC_TYPE_APPLICATION = 'a' // ff/v1/<team>/a/<application>/p/<instance|dev:device>/out/...
+    const SCOPE_TEAM = 'team'
+    const SCOPE_APPLICATION = 'application'
+    const BROADCAST_APPLICATION = 'application' // project link in/out `broadcast` value for an application broadcast
     const DEFAULT_PROJECT_CACHE_AGE = 30 * 1000 // 30 seconds
+    const APPLICATION_ID_RETRY_MIN = 30 * 1000 // first retry after 30 seconds (+/- jitter)
+    const APPLICATION_ID_RETRY_MAX = 5 * 60 * 1000 // back off to 5 minutes (+/- jitter)
+    const ERROR_APPLICATION_SCOPE_NOT_SUPPORTED = 'APPLICATION_SCOPE_NOT_SUPPORTED'
     // It is not unreasonable to expect `projectID` and `applicationID` are set for an instance
     // owned device, however an application owned device should not have a projectID.
     // therefore, assume project owned if `projectID` is set
@@ -64,30 +73,105 @@ module.exports = function (RED) {
         DEFAULT_PROJECT_CACHE_AGE
     })
 
+    // The application this instance/device belongs to. Devices are provided this in settings,
+    // hosted instances learn it from the platform (see `getInstances`)
+    let ownApplicationId = RED.settings.flowforge.applicationID || ''
+    // `true` once the platform has confirmed it supports application aware project links
+    let supportsApplications = false
+
     /**
-     * Opinionated test to check topic is valid for subscription...
-     * * May start with $share/<group>/
-     * * Must not contain  `<space>` `+` `#` `$` `\` `\b` `\f` `\n` `\r` `\t` `\v`
-     * * Permits `+` character at index 4 (project name)
-     * * Must have at least 1 character between slashes
-     * * Must not start or end with a slash
-     * @param {string} topic
-     * @returns `true` if it is a valid sub topic
+     * Get the instances (and application owned devices) in the team.
+     * Also records the application this instance belongs to, if the platform provides it
+     * @param {number} [maxAge] - max age of cached data
      */
-    function isValidSubscriptionTopic (topic) {
-        return /^(?:\$share\/[^/$+#\b\f\n\r\t\v\0\s]+\/)?(?:[^/$+#\b\f\n\r\t\v\0\s]+\/){4}(?:\+|[^/$+#\b\f\n\r\t\v\0\s]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0\s]+?)){2,}$/.test(topic)
+    async function getInstances (maxAge) {
+        const data = await instancesApi.getInstances(maxAge)
+        supportsApplications = !!data?.supportsApplications
+        if (!ownApplicationId && data?.self?.applicationId) {
+            ownApplicationId = data.self.applicationId
+        }
+        return data
     }
 
     /**
-     * Opinionated test to check topic is valid for publishing...
-     * * Must not contain  `<space>` `+` `#` `$` `\` `\b` `\f` `\n` `\r` `\t` `\v`
-     * * Must have at least 1 character between slashes
-     * * Must not start or end with a slash
-     * @param {string} topic
-     * @returns `true` if it is a valid sub topic
+     * Get the id of the application this instance belongs to.
+     * Devices know their application from settings, but the platform must also support
+     * application scoped topics, so this always requires `supportsApplications`.
+     * If FlowFuse could not be reached, the request error is thrown. If FlowFuse answered but
+     * does not support application scope, the error has `code` `APPLICATION_SCOPE_NOT_SUPPORTED`
+     * @returns {Promise<string>} the application id
      */
-    function isValidPublishTopic (topic) {
-        return /^(?:[^/$+#\b\f\n\r\t\v\0]+\/){4}(?:[^/$+#\b\f\n\r\t\v\0]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0]+?)){2,}$/.test(topic)
+    async function getOwnApplicationId () {
+        if (!ownApplicationId || !supportsApplications) {
+            await getInstances()
+        }
+        if (!ownApplicationId || !supportsApplications) {
+            const err = new Error('Application scoped messages are not supported by this version of FlowFuse')
+            err.code = ERROR_APPLICATION_SCOPE_NOT_SUPPORTED
+            throw err
+        }
+        return ownApplicationId
+    }
+
+    // In nodes on the application channel wait here until the application id is known.
+    // One lookup is shared by all waiting nodes. While FlowFuse cannot be reached, it is
+    // retried with backoff and jitter, and straight away when the MQTT client connects.
+    const applicationIdWaiters = new Set()
+    let applicationIdLookup = null
+    let applicationIdRetryTimer = null
+    let applicationIdRetryCount = 0
+
+    /**
+     * Wait for the id of the application this instance belongs to
+     * @param {object} waiter
+     * @param {function(string)} waiter.resolve - called with the application id
+     * @param {function(Error)} waiter.reject - called if FlowFuse does not support application scope
+     * @param {function(Error)} waiter.waiting - called each time a lookup fails and will be retried
+     * @returns {function} call to stop waiting
+     */
+    function waitForApplicationId (waiter) {
+        applicationIdWaiters.add(waiter)
+        lookupApplicationId()
+        return function () {
+            applicationIdWaiters.delete(waiter)
+            if (!applicationIdWaiters.size) {
+                clearTimeout(applicationIdRetryTimer)
+                applicationIdRetryTimer = null
+                applicationIdRetryCount = 0
+            }
+        }
+    }
+
+    function lookupApplicationId () {
+        if (applicationIdLookup || !applicationIdWaiters.size) {
+            return
+        }
+        clearTimeout(applicationIdRetryTimer)
+        applicationIdRetryTimer = null
+        const settle = (fn) => {
+            const waiters = [...applicationIdWaiters]
+            applicationIdWaiters.clear()
+            applicationIdRetryCount = 0
+            waiters.forEach(fn)
+        }
+        applicationIdLookup = getOwnApplicationId()
+            .then(applicationId => {
+                settle(waiter => waiter.resolve(applicationId))
+            })
+            .catch(err => {
+                if (err.code === ERROR_APPLICATION_SCOPE_NOT_SUPPORTED) {
+                    settle(waiter => waiter.reject(err))
+                    return
+                }
+                applicationIdWaiters.forEach(waiter => waiter.waiting(err))
+                if (applicationIdWaiters.size) {
+                    const delay = utils.getRetryDelay(applicationIdRetryCount++, APPLICATION_ID_RETRY_MIN, APPLICATION_ID_RETRY_MAX)
+                    applicationIdRetryTimer = setTimeout(lookupApplicationId, delay)
+                }
+            })
+            .finally(() => {
+                applicationIdLookup = null
+            })
     }
 
     function jsonReplacer (_key, value) {
@@ -140,7 +224,13 @@ module.exports = function (RED) {
         // ff/v1/7N152GxG2p/p/ca65f5ed-aea0-4a10-ac9a-2086b6af6700/out/b1/b1    pub broadcast
         // ff/v1/7N152GxG2p/p/23d79df8-183c-4104-aa97-8915e1897326/in/a/b       sub proj→prog
         // ff/v1/7N152GxG2p/p/+/out/b1/b1                                       sub broadcast
+        // ff/v1/7N152GxG2p/a/aBcD3fGh1/p/+/out/b1/b1                           sub application broadcast
         const topicParts = (topic || '').split('/')
+        const isApplicationScope = topicParts[3] === TOPIC_TYPE_APPLICATION
+        if (isApplicationScope) {
+            // remove `a/<application>` so the remaining parts align with a team scoped topic
+            topicParts.splice(3, 2)
+        }
         const projectOrDevice = topicParts[3] ? (topicParts[3] === 'd' ? 'd' : 'p') : null
         const isBroadcast = topicParts[5] ? topicParts[5] === 'out' : null
         // eslint-disable-next-line no-unused-vars
@@ -151,6 +241,8 @@ module.exports = function (RED) {
             topicVersion: topicParts[1],
             teamID: topicParts[2],
             type: projectOrDevice,
+            scope: isApplicationScope ? SCOPE_APPLICATION : SCOPE_TEAM,
+            applicationID: isApplicationScope ? (topic || '').split('/')[4] : undefined,
             projectID: topicParts[4],
             isBroadcast,
             isCallResponse,
@@ -159,10 +251,21 @@ module.exports = function (RED) {
         return result
     }
 
-    function buildLinkTopic (node, projectOrDeviceId, subTopic, broadcast, responseTopic) {
+    /**
+     * Build a project link topic
+     * @param {object} node - the node the topic is for (`null` for a call response)
+     * @param {string} projectOrDeviceId - the target/source instance id or `dev:<deviceId>` (or `all` for a broadcast listener)
+     * @param {string} subTopic - the user topic
+     * @param {boolean} broadcast - `true` if the topic is a broadcast topic
+     * @param {string} [responseTopic] - the response prefix for a call response
+     * @param {string} [applicationId] - for broadcast topics, the application to scope the broadcast to
+     * @returns {string} the topic
+     */
+    function buildLinkTopic (node, projectOrDeviceId, subTopic, broadcast, responseTopic, applicationId) {
         // ↓ Useful for debugging ↓
         // console.log(`🔗 buildLinkTopic: for ${OWNER_TYPE} ${node?.ownId || ''} ${projectOrDeviceId} ${subTopic} ${broadcast} ${responseTopic}`)
         const topicParts = [TOPIC_HEADER, TOPIC_VERSION, RED.settings.flowforge.teamID]
+        const broadcastType = applicationId ? [TOPIC_TYPE_APPLICATION, applicationId, TOPIC_TYPE_TEAM] : [TOPIC_TYPE_TEAM]
         if (!node || node.type === 'project link call') {
             topicParts.push('p')
             topicParts.push(projectOrDeviceId)
@@ -172,30 +275,36 @@ module.exports = function (RED) {
                 topicParts.push('in')
             }
         } else if (node.type === 'project link in') {
-            topicParts.push('p')
             if (broadcast && projectOrDeviceId === 'all') { // Listen for broadcast messages from all projects
+                topicParts.push(...broadcastType)
                 topicParts.push('+')
                 topicParts.push('out')
                 // e.g. SUB ff/v1/7N152GxG2p/p/+/out/a/b
+                // e.g. SUB ff/v1/7N152GxG2p/a/APP-ID/p/+/out/a/b
             } else if (broadcast) { // Listen for broadcast messages from a specific project
+                topicParts.push(...broadcastType)
                 topicParts.push(projectOrDeviceId)
                 topicParts.push('out')
                 // e.g. SUB ff/v1/7N152GxG2p/p/SOURCE-PROJ-ID-aa97-8915e1897326/out/a/b
+                // e.g. SUB ff/v1/7N152GxG2p/a/APP-ID/p/dev:<device-id>/out/a/b
             } else { // Receive messages sent to this instance
+                topicParts.push('p')
                 topicParts.push(node.ownId)
                 topicParts.push('in')
                 // e.g. SUB ff/v1/7N152GxG2p/p/PROJECT-OWN-ID-aa97-8915e1897326/in/a/b
             }
         } else if (node.type === 'project link out') {
-            topicParts.push('p')
             if (broadcast) {
                 // publish to all (broadcast)
+                topicParts.push(...broadcastType)
                 topicParts.push(node.ownId)
                 topicParts.push('out')
                 // e.g. PUB topic ff/v1/7N152GxG2p/p/PROJECT-OWN-ID-aa97-8915e1897326/out/a/b
                 // e.g. PUB ff/v1/7N152GxG2p/p/dev:<device-id>/out/a/b
+                // e.g. PUB ff/v1/7N152GxG2p/a/APP-ID/p/dev:<device-id>/out/a/b
             } else {
                 // publish to a specific project
+                topicParts.push('p')
                 topicParts.push(projectOrDeviceId)
                 topicParts.push('in')
                 // e.g. PUB ff/v1/7N152GxG2p/p/TARGET-PROJ-ID-aa97-8915e1897326/in/a/b
@@ -250,8 +359,10 @@ module.exports = function (RED) {
             let broadcastLookupTopic
             if (subID === 2) {
                 const topicParts = (topic || '').split('/')
-                if (topicParts[5] === 'out') {
-                    topicParts[4] = '+' // ff/v1/team-id/p/+/out/sub-topic all projects
+                // for an application scoped topic, the source is two segments further along
+                const sourceIndex = topicParts[3] === TOPIC_TYPE_APPLICATION ? 6 : 4
+                if (topicParts[sourceIndex + 1] === 'out') {
+                    topicParts[sourceIndex] = '+' // ff/v1/team-id/p/+/out/sub-topic or ff/v1/team-id/a/app-id/p/+/out/sub-topic all sources
                     broadcastLookupTopic = topicParts.join('/')
                     broadcastCallbacks = topicCallbackMap.get('2:' + broadcastLookupTopic)
                 }
@@ -265,12 +376,16 @@ module.exports = function (RED) {
             let err, msg
             try {
                 msg = JSON.parse(message.toString(), jsonReviver)
+                const linkTopic = parseLinkTopic(topic)
                 msg.projectLink = {
                     ...msg.projectLink,
                     instanceId: packet.properties?.userProperties?._projectID || '',
                     projectId: packet.properties?.userProperties?._projectID || '',
                     applicationId: packet.properties?.userProperties?._applicationID || '',
-                    topic: topic.split('/').slice(6).join('/')
+                    topic: linkTopic.subTopic
+                }
+                if (linkTopic.isBroadcast) {
+                    msg.projectLink.scope = linkTopic.scope
                 }
                 if (packet.properties?.userProperties?._deviceId) {
                     msg.projectLink.deviceId = packet.properties?.userProperties?._deviceId
@@ -311,6 +426,15 @@ module.exports = function (RED) {
                     node.status({ fill: 'green', shape: 'dot', text: 'connected' })
                 } catch (error) { /* do nothing */ }
             })
+            // the broker authenticates connections with FlowFuse, so it is likely reachable
+            // again: retry any pending application id lookup now rather than wait for the timer
+            lookupApplicationId()
+            // Hosted instances are not given their application id in settings. Learn it now so
+            // messages sent by any node carry it (`_applicationID`). Best effort: until this
+            // completes, messages are sent without it, as they always were.
+            if (!ownApplicationId) {
+                getInstances().catch(_err => {})
+            }
         }
         function onReconnect () {
             RED.log.info('Project Link nodes reconnecting')
@@ -475,7 +599,7 @@ module.exports = function (RED) {
                 subOptions.properties = Object.assign({}, options.properties)
                 subOptions.properties.userProperties = subOptions.properties.userProperties || {}
                 subOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID || ''
-                subOptions.properties.userProperties._applicationID = RED.settings.flowforge.applicationID || ''
+                subOptions.properties.userProperties._applicationID = ownApplicationId
                 if (OWNER_TYPE === 'application') {
                     subOptions.properties.userProperties._deviceID = process.env.FF_DEVICE_ID || ''
                 }
@@ -491,8 +615,17 @@ module.exports = function (RED) {
                         }
                         try {
                             // console.log(`SUB ${topic}`)
-                            client.subscribe(topic, subOptions)
-                            resolve(true)
+                            client.subscribe(topic, subOptions, (err, granted) => {
+                                if (err) {
+                                    reject(err)
+                                } else if (granted?.some(g => g.qos >= 128)) {
+                                    // the broker refused the subscription. This can happen when the
+                                    // FlowFuse platform does not support the selected option
+                                    reject(new Error('Subscription not permitted by the FlowFuse platform'))
+                                } else {
+                                    resolve(true)
+                                }
+                            })
                         } catch (error) {
                             reject(error)
                         }
@@ -503,9 +636,13 @@ module.exports = function (RED) {
             unsubscribe (node, topic, callback) {
                 // generate a lookup based on the subscriptionId + : + topic
                 let lookupTopic = topic
+                // shared subscriptions are registered without the $share/<id>/ prefix (see subscribe)
+                if (lookupTopic.startsWith('$share')) {
+                    lookupTopic = lookupTopic.split('/').slice(2).join('/')
+                }
                 const subID = [null, 1, 2][node.subscriptionIdentifier]
                 if (subID) {
-                    lookupTopic = subID + ':' + topic
+                    lookupTopic = subID + ':' + lookupTopic
                 }
                 /** @type {Set} */
                 const callbacks = topicCallbackMap.get(lookupTopic)
@@ -548,7 +685,7 @@ module.exports = function (RED) {
                 pubOptions.properties = Object.assign({}, options.properties)
                 pubOptions.properties.userProperties = pubOptions.properties.userProperties || {}
                 pubOptions.properties.userProperties._projectID = RED.settings.flowforge.projectID || ''
-                pubOptions.properties.userProperties._applicationID = RED.settings.flowforge.applicationID || ''
+                pubOptions.properties.userProperties._applicationID = ownApplicationId
                 if (process.env.FF_DEVICE_ID) {
                     pubOptions.properties.userProperties._deviceId = process.env.FF_DEVICE_ID
                     pubOptions.properties.userProperties._deviceName = process.env.FF_DEVICE_NAME || ''
@@ -776,20 +913,21 @@ module.exports = function (RED) {
         const node = this
         node.ownId = OWNER_TYPE === 'application' ? 'dev:' + process.env.FF_DEVICE_ID : RED.settings.flowforge.projectID
         node.project = n.project
-        node.subscriptionIdentifier = (n.broadcast && n.project === 'all') ? 2 : 1
         node.subTopic = n.topic
-        node.broadcast = n.broadcast === true || n.broadcast === 'true'
-        node.topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast)
+        // application broadcast listeners are saved as `broadcast: 'application'` so older versions of
+        // these nodes (which ignore `scope`) do not listen for team broadcasts instead
+        node.broadcast = n.broadcast === true || n.broadcast === 'true' || n.broadcast === BROADCAST_APPLICATION
+        node.scope = (node.broadcast && (n.scope === SCOPE_APPLICATION || n.broadcast === BROADCAST_APPLICATION)) ? SCOPE_APPLICATION : SCOPE_TEAM
+        node.subscriptionIdentifier = (node.broadcast && n.project === 'all') ? 2 : 1
+        if (node.scope === SCOPE_TEAM) {
+            node.topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast)
+        }
 
         let configOk = true
         if (featureEnabled === false) {
             configOk = false
             node.status({ fill: 'red', shape: 'dot', text: 'feature not available' })
             node.warn('Project Link feature is not available for your current Team.')
-        } else if (node.broadcast !== true && OWNER_TYPE === 'application') {
-            configOk = false
-            node.status({ fill: 'red', shape: 'dot', text: 'unsupported source option' })
-            node.warn('Receiving direct messages is not supported for a remote instance assigned to an application. Please update the node source option to use "Listen for broadcast messages".')
         } else {
             mqtt.connect()
             mqtt.registerStatus(node)
@@ -813,39 +951,73 @@ module.exports = function (RED) {
             }
             node.receive(msg)
         }
-        // to my inbox (direct to device not supported, only direct to an instance is currently supported)
+        // to my inbox
         // * this project in           ff/v1/7N152GxG2p/p/ca65f5ed-aea0-4a10-ac9a-2086b6af6700/in/b1/b1     sub proj→prog
-        // broadcasts
+        // * this device in            ff/v1/7N152GxG2p/p/dev:<device-id>/in/b1/b1                          sub proj→dev
+        // team broadcasts
         // * specific project out      ff/v1/7N152GxG2p/p/ca65f5ed-aea0-4a10-ac9a-2086b6af6700/out/b1/b1    sub broadcast
         // * +any project/device+ out  ff/v1/7N152GxG2p/p/+/out/b1/b1                                       sub broadcast
-        let subscribedTopic = node.topic
-        if (RED.settings.flowforge.projectLink.useSharedSubscriptions) {
-            subscribedTopic = `$share/${RED.settings.flowforge.projectID}/${node.topic}`
+        // application broadcasts
+        // * specific project out      ff/v1/7N152GxG2p/a/APP-ID/p/ca65f5ed-aea0-4a10-ac9a-2086b6af6700/out/b1/b1
+        // * +any project/device+ out  ff/v1/7N152GxG2p/a/APP-ID/p/+/out/b1/b1
+        let subscribedTopic = null
+        let stopWaitingForApplicationId = null
+        const subscribe = function () {
+            subscribedTopic = node.topic
+            if (RED.settings.flowforge.projectLink.useSharedSubscriptions) {
+                subscribedTopic = `$share/${RED.settings.flowforge.projectID}/${node.topic}`
+            }
+            // ↓ Useful for debugging ↓
+            // console.log(`🔗 LINK-IN SUB ${subscribedTopic}`)
+            return mqtt.subscribe(node, subscribedTopic, { qos: 2 }, onSub)
         }
-        // ↓ Useful for debugging ↓
-        // console.log(`🔗 LINK-IN SUB ${subscribedTopic}`)
         if (configOk) {
-            mqtt.subscribe(node, subscribedTopic, { qos: 2 }, onSub)
-                .then(_result => {})
-                .catch(err => {
-                    node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
-                    node.error(err)
+            if (node.scope === SCOPE_APPLICATION) {
+                // application scoped topics need the id of this instance's application
+                let warned = false
+                stopWaitingForApplicationId = waitForApplicationId({
+                    resolve: applicationId => {
+                        stopWaitingForApplicationId = null
+                        if (warned) {
+                            // restore the connection status hidden while waiting
+                            mqtt.registerStatus(node)
+                            node.status(mqtt.connected ? { fill: 'green', shape: 'dot', text: 'connected' } : {})
+                        }
+                        node.topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, null, applicationId)
+                        subscribe().catch(err => {
+                            node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
+                            node.error(err)
+                        })
+                        validateSource()
+                    },
+                    reject: err => {
+                        stopWaitingForApplicationId = null
+                        node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
+                        node.error(err)
+                    },
+                    waiting: err => {
+                        if (!warned) {
+                            warned = true
+                            mqtt.deregisterStatus(node) // keep the waiting status until the application is known
+                            node.status({ fill: 'yellow', shape: 'ring', text: 'waiting for FlowFuse' })
+                            // connection errors (e.g. ECONNREFUSED to `localhost`) can have an empty message
+                            node.warn(`Unable to get this instance's application from FlowFuse, will keep retrying: ${err.message || err.code || 'unknown error'}`)
+                        }
+                    }
                 })
+            } else {
+                subscribe()
+                    .then(_result => {})
+                    .catch(err => {
+                        node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
+                        node.error(err)
+                    })
+            }
 
             // check the project exists in the platform when broadcasting messages to a specific project
-            if (node.broadcast === true && node.project !== 'all') {
-                instancesApi.getInstances()
-                    .then(data => {
-                        // Check if the current project exists in the instances list
-                        const projectExists = data.instances && data.instances.some(p => p.id === node.project)
-                        if (!projectExists) {
-                            throw new Error(`Selected source '${node.project}' not found in FlowFuse. Listening to a specific source only works for hosted instances in this team: to receive from remote instances, listen for broadcasts instead.`)
-                        }
-                    }).catch(err => {
-                        mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
-                        node.status({ fill: 'red', shape: 'dot', text: 'invalid source' })
-                        node.warn(err.message)
-                    })
+            // (for application scope this is done once the application is known)
+            if (node.scope === SCOPE_TEAM) {
+                validateSource()
             }
 
             this.on('input', function (msg, send, done) {
@@ -853,8 +1025,35 @@ module.exports = function (RED) {
                 done()
             })
         }
+        function validateSource () {
+            if (node.broadcast === true && node.project !== 'all') {
+                getInstances()
+                    .then(data => {
+                        // Check if the current project exists in the instances list
+                        const source = data.instances && data.instances.find(p => p.id === node.project)
+                        if (!source) {
+                            if (data.supportsApplications) {
+                                throw new Error(`Selected source '${node.project}' not found in FlowFuse. Listening to a specific source only works for instances in this team.`)
+                            }
+                            throw new Error(`Selected source '${node.project}' not found in FlowFuse. Listening to a specific source only works for hosted instances in this team: to receive from remote instances, listen for broadcasts instead.`)
+                        }
+                        if (node.scope === SCOPE_APPLICATION && data.supportsApplications && source.applicationId !== ownApplicationId) {
+                            throw new Error(`Selected source '${source.name}' is not in this application. Application broadcasts can only be received from instances in the same application.`)
+                        }
+                    }).catch(err => {
+                        mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
+                        node.status({ fill: 'red', shape: 'dot', text: 'invalid source' })
+                        node.warn(err.message)
+                    })
+            }
+        }
         node.on('close', function (done) {
-            mqtt.unsubscribe(node, subscribedTopic, onSub)
+            if (stopWaitingForApplicationId) {
+                stopWaitingForApplicationId()
+                stopWaitingForApplicationId = null
+            }
+            const unsubscribe = subscribedTopic ? mqtt.unsubscribe(node, subscribedTopic, onSub) : Promise.resolve()
+            unsubscribe
                 .then(() => {})
                 .catch(_err => {})
                 .finally(() => {
@@ -884,7 +1083,10 @@ module.exports = function (RED) {
         node.project = n.project
         node.subTopic = n.topic
         node.mode = n.mode || 'link'
-        node.broadcast = n.broadcast === true || n.broadcast === 'true'
+        // application broadcasts are saved as `broadcast: 'application'` so older versions of
+        // these nodes (which ignore `scope`) send nothing rather than a team broadcast
+        node.broadcast = n.broadcast === true || n.broadcast === 'true' || n.broadcast === BROADCAST_APPLICATION
+        node.scope = (node.broadcast && (n.scope === SCOPE_APPLICATION || n.broadcast === BROADCAST_APPLICATION)) ? SCOPE_APPLICATION : SCOPE_TEAM
         if (featureEnabled === false) {
             node.status({ fill: 'red', shape: 'dot', text: 'feature not available' })
             node.warn('Project Link feature is not available for your current Team.')
@@ -899,11 +1101,14 @@ module.exports = function (RED) {
         // When the out node is set to link mode and is targeting a specific project,
         // we should check the target exists in the platform
         if (node.mode === 'link' && node.broadcast === false) {
-            instancesApi.getInstances()
+            getInstances()
                 .then(data => {
                     // Check if the current project exists in the instances list
                     const projectExists = data.instances && data.instances.some(p => p.id === node.project)
                     if (!projectExists) {
+                        if (data.supportsApplications) {
+                            throw new Error(`Selected target '${node.project}' not found in FlowFuse. Sending to a specific target only works for instances in this team.`)
+                        }
                         throw new Error(`Selected target '${node.project}' not found in FlowFuse. Sending to a specific target only works for hosted instances in this team: to reach remote instances, broadcast on a topic instead.`)
                     }
                 }).catch(err => {
@@ -940,7 +1145,8 @@ module.exports = function (RED) {
                     }
                     done()
                 } else if (node.mode === 'link') {
-                    const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast)
+                    const applicationId = node.scope === SCOPE_APPLICATION ? await getOwnApplicationId() : null
+                    const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, null, applicationId)
                     // ↓ Useful for debugging ↓
                     // console.log(`🔗 LINK-OUT PUB ${topic}`)
                     await mqtt.publish(node, topic, msg)
@@ -1021,13 +1227,16 @@ module.exports = function (RED) {
                     node.error(err)
                 })
 
-            instancesApi.getInstances()
+            getInstances()
                 .then(data => {
                     // Check if the current project exists in the instances list
                     const target = data.instances && data.instances.find(p => p.id === node.project)
                     node.targetName = target?.name
                     const projectExists = !!target
                     if (!projectExists) {
+                        if (data.supportsApplications) {
+                            throw new Error(`Selected target '${node.project}' not found in FlowFuse. A call can only target an instance in this team.`)
+                        }
                         throw new Error(`Selected target '${node.project}' not found in FlowFuse. A call can only target a hosted instance in this team: a remote instance can make calls, but cannot receive them.`)
                     }
                 }).catch(err => {
@@ -1050,7 +1259,7 @@ module.exports = function (RED) {
                     node: node.id,
                     project: RED.settings.flowforge.projectID,
                     instance: RED.settings.flowforge.instanceID,
-                    application: RED.settings.flowforge.applicationID,
+                    application: ownApplicationId,
                     topic: node.subTopic,
                     response: node.responseTopicPrefix,
                     ts: Date.now()
@@ -1153,10 +1362,14 @@ module.exports = function (RED) {
     // Endpoint for querying list of projects in node UI
     RED.httpAdmin.get('/nr-project-link/projects', RED.auth.needsPermission('flows.write'), async function (_req, res) {
         try {
-            const list = await instancesApi.getInstances(0) // get fresh list of projects
+            const list = await getInstances(0) // get fresh list of projects
             // ↓ Useful for debugging ↓
             // console.log(`🔗 LINK-PROJECTS LIST ${list.count} projects`)
-            res.json(list)
+            res.json({
+                ...list,
+                ownId: OWNER_TYPE === 'application' ? 'dev:' + process.env.FF_DEVICE_ID : RED.settings.flowforge.projectID,
+                ownApplicationId
+            })
         } catch (err) {
             res.sendStatus(500)
         }
