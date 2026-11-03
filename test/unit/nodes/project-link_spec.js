@@ -85,6 +85,15 @@ describe('project-link node', function () {
             util: {
                 cloneMessage (msg) {
                     return JSON.parse(JSON.stringify(msg))
+                },
+                evaluateNodeProperty (value, type, _node, msg) {
+                    if (type === 'msg') {
+                        return value.split('.').reduce((obj, key) => obj?.[key], msg)
+                    }
+                    if (type === 'env') {
+                        return process.env[value]
+                    }
+                    throw new Error(`unsupported type ${type}`)
                 }
             }
         }
@@ -785,6 +794,164 @@ describe('project-link node', function () {
             const options = env.mqttStub.subscribe.args[0][1]
             should(options).be.an.Object()
             options.should.have.property('qos').and.equal(2)
+        })
+    })
+
+    describe('Dynamic target', function () {
+        const OTHER_ID = '5555-6666-7777-8888abcdef12'
+        const DEVICE_ID = 'dev:abcdef'
+        const topic = 'cloud/project-nodes-test/dynamic'
+        const instances = [
+            { id: PROJECT_ID, name: 'A-PROJECT' },
+            { id: OTHER_ID, name: 'OTHER-PROJECT' },
+            { id: DEVICE_ID, name: 'A-DEVICE', type: 'device' }
+        ]
+
+        function create (type, config, getInstancesStub) {
+            const env = setup()
+            const nodeEvents = {}
+            const node = {
+                on: (event, cb) => { nodeEvents[event] = cb },
+                error: sinon.fake(),
+                warn: sinon.fake(),
+                status: sinon.fake(),
+                type
+            }
+            const getInstances = getInstancesStub || sinon.stub().resolves({ count: instances.length, instances })
+            InstancesApi.InstancesApi = sinon.stub().returns({ getInstances })
+            projectLinkPackage(env.RED)
+            env.nodes[type].NodeConstructor.call(node, { topic, timeout: 0.05, ...config })
+            return { env, node, nodeEvents, getInstances }
+        }
+
+        afterEach(function () {
+            delete process.env.TEST_LINK_TARGET
+        })
+
+        describe('project link out', function () {
+            it('should send to the instance in a msg property', async function () {
+                const { env, nodeEvents } = create('project link out', { mode: 'link', project: PROJECT_ID, targetType: 'msg', targetValue: 'target' })
+                const done = sinon.fake()
+                await nodeEvents.input({ payload: 'test', target: OTHER_ID }, sinon.fake(), done)
+                done.calledOnceWithExactly().should.be.true()
+                env.mqttStub.publish.calledOnce.should.be.true()
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${OTHER_ID}/in/${topic}`)
+            })
+            it('should send to a different instance for each message', async function () {
+                const { env, nodeEvents } = create('project link out', { mode: 'link', targetType: 'msg', targetValue: 'payload.to' })
+                await nodeEvents.input({ payload: { to: OTHER_ID } }, sinon.fake(), sinon.fake())
+                await nodeEvents.input({ payload: { to: PROJECT_ID } }, sinon.fake(), sinon.fake())
+                env.mqttStub.publish.args.map(args => args[0]).should.eql([
+                    `ff/v1/${TEAM_ID}/p/${OTHER_ID}/in/${topic}`,
+                    `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/${topic}`
+                ])
+            })
+            it('should send to the instance in an environment variable', async function () {
+                process.env.TEST_LINK_TARGET = OTHER_ID
+                const { env, nodeEvents } = create('project link out', { mode: 'link', targetType: 'env', targetValue: 'TEST_LINK_TARGET' })
+                await nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${OTHER_ID}/in/${topic}`)
+            })
+            it('should send to a remote instance', async function () {
+                const { env, nodeEvents } = create('project link out', { mode: 'link', targetType: 'msg', targetValue: 'target' })
+                await nodeEvents.input({ payload: 'test', target: DEVICE_ID }, sinon.fake(), sinon.fake())
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${DEVICE_ID}/in/${topic}`)
+            })
+            it('should not check the target when the node starts', function () {
+                const { getInstances } = create('project link out', { mode: 'link', targetType: 'msg', targetValue: 'target' })
+                getInstances.called.should.be.false()
+            })
+            it('should send without asking FlowFuse, even when it cannot be reached', async function () {
+                const getInstances = sinon.stub().rejects(new Error('ECONNREFUSED'))
+                const { env, nodeEvents } = create('project link out', { mode: 'link', targetType: 'msg', targetValue: 'target' }, getInstances)
+                const done = sinon.fake()
+                await nodeEvents.input({ payload: 'test', target: OTHER_ID }, sinon.fake(), done)
+                done.calledOnceWithExactly().should.be.true()
+                getInstances.called.should.be.false()
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${OTHER_ID}/in/${topic}`)
+            })
+            for (const [name, msg] of [
+                ['missing', { payload: 'test' }],
+                ['not a string', { payload: 'test', target: 123 }],
+                ['empty', { payload: 'test', target: '' }],
+                ['not an instance id', { payload: 'test', target: 'a/b' }],
+                ['a topic wildcard', { payload: 'test', target: '+' }]
+            ]) {
+                it(`should error when the target is ${name}`, async function () {
+                    const { env, nodeEvents } = create('project link out', { mode: 'link', targetType: 'msg', targetValue: 'target' })
+                    const done = sinon.fake()
+                    await nodeEvents.input(msg, sinon.fake(), done)
+                    done.calledOnce.should.be.true()
+                    done.args[0][0].should.be.an.Error()
+                    done.args[0][0].message.should.match(/Invalid target: msg.target/)
+                    env.mqttStub.publish.called.should.be.false()
+                })
+            }
+            it('should ignore the target type when broadcasting', async function () {
+                const { env, nodeEvents, getInstances } = create('project link out', { mode: 'link', broadcast: true, targetType: 'msg', targetValue: 'target' })
+                const done = sinon.fake()
+                await nodeEvents.input({ payload: 'test' }, sinon.fake(), done)
+                done.calledOnceWithExactly().should.be.true()
+                getInstances.called.should.be.false()
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/out/${topic}`)
+            })
+            it('should still check a selected instance when the node starts', function () {
+                const { getInstances } = create('project link out', { mode: 'link', project: PROJECT_ID })
+                getInstances.called.should.be.true()
+            })
+        })
+
+        describe('project link call', function () {
+            it('should call the instance in a msg property', async function () {
+                const { env, node, nodeEvents } = create('project link call', { targetType: 'msg', targetValue: 'target' })
+                should(node.topic).be.null()
+                // the response channel does not depend on the target
+                node.responseTopic.should.equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/${topic}`)
+                await nodeEvents.input({ payload: 'test', target: OTHER_ID }, sinon.fake(), sinon.fake())
+                env.mqttStub.publish.calledOnce.should.be.true()
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${OTHER_ID}/in/${topic}`)
+                const pubMessage = JSON.parse(env.mqttStub.publish.args[0][1])
+                pubMessage.projectLink.callStack.should.have.length(1)
+                pubMessage.projectLink.callStack[0].should.have.property('response', 'res')
+            })
+            it('should call the instance in an environment variable', async function () {
+                process.env.TEST_LINK_TARGET = DEVICE_ID
+                const { env, nodeEvents } = create('project link call', { targetType: 'env', targetValue: 'TEST_LINK_TARGET' })
+                await nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${DEVICE_ID}/in/${topic}`)
+            })
+            it('should call without asking FlowFuse, even when it cannot be reached', async function () {
+                const getInstances = sinon.stub().rejects(new Error('ECONNREFUSED'))
+                const { env, nodeEvents } = create('project link call', { targetType: 'msg', targetValue: 'target' }, getInstances)
+                await nodeEvents.input({ payload: 'test', target: OTHER_ID }, sinon.fake(), sinon.fake())
+                getInstances.called.should.be.false()
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${OTHER_ID}/in/${topic}`)
+            })
+            it('should name the dynamic target when a call times out', async function () {
+                const { node, nodeEvents } = create('project link call', { targetType: 'msg', targetValue: 'target' })
+                await nodeEvents.input({ payload: 'test', target: OTHER_ID }, sinon.fake(), sinon.fake())
+                await new Promise(resolve => setTimeout(resolve, 150))
+                node.error.calledOnce.should.be.true()
+                node.error.args[0][0].should.match(new RegExp(`instance ${OTHER_ID}`))
+            })
+            it('should error without waiting for a response when the target is not an instance id', async function () {
+                const { env, node, nodeEvents } = create('project link call', { targetType: 'msg', targetValue: 'target' })
+                const done = sinon.fake()
+                await nodeEvents.input({ payload: 'test', target: 'a/b' }, sinon.fake(), done)
+                done.calledOnce.should.be.true()
+                done.args[0][0].message.should.match(/Invalid target: msg.target/)
+                env.mqttStub.publish.called.should.be.false()
+                // no call is left waiting to time out
+                await new Promise(resolve => setTimeout(resolve, 150))
+                node.error.called.should.be.false()
+            })
+            it('should error when the target is missing', async function () {
+                const { env, nodeEvents } = create('project link call', { targetType: 'msg', targetValue: 'target' })
+                const done = sinon.fake()
+                await nodeEvents.input({ payload: 'test' }, sinon.fake(), done)
+                done.args[0][0].message.should.match(/Invalid target: msg.target/)
+                env.mqttStub.publish.called.should.be.false()
+            })
         })
     })
 
