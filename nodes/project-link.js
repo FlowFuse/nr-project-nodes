@@ -1171,6 +1171,41 @@ module.exports = function (RED) {
             })
         }
 
+        // application broadcasts need the id of this instance's application. Learn it at start
+        // (retrying until FlowFuse answers) so sending does not depend on the platform
+        let stopWaitingForApplicationId = null
+        if (featureEnabled !== false && node.mode === 'link' && node.scope === SCOPE_APPLICATION) {
+            let warned = false
+            const restoreStatus = () => {
+                if (warned) {
+                    // restore the connection status hidden while waiting
+                    warned = false
+                    mqtt.registerStatus(node)
+                    node.status(mqtt.connected ? { fill: 'green', shape: 'dot', text: 'connected' } : {})
+                }
+            }
+            stopWaitingForApplicationId = waitForApplicationId({
+                resolve: () => {
+                    stopWaitingForApplicationId = null
+                    restoreStatus()
+                },
+                reject: err => {
+                    stopWaitingForApplicationId = null
+                    restoreStatus()
+                    node.warn(err.message)
+                },
+                waiting: err => {
+                    if (!warned) {
+                        warned = true
+                        mqtt.deregisterStatus(node) // keep the waiting status until the application is known
+                        node.status({ fill: 'yellow', shape: 'ring', text: 'waiting for FlowFuse' })
+                        // connection errors (e.g. ECONNREFUSED to `localhost`) can have an empty message
+                        node.warn(`Unable to get this instance's application from FlowFuse, will keep retrying: ${err.message || err.code || 'unknown error'}`)
+                    }
+                }
+            })
+        }
+
         node.on('input', async function (msg, _send, done) {
             if (featureEnabled === false) {
                 done()
@@ -1198,7 +1233,18 @@ module.exports = function (RED) {
                     }
                     done()
                 } else if (node.mode === 'link') {
-                    const applicationId = node.scope === SCOPE_APPLICATION ? await getOwnApplicationId() : null
+                    let applicationId = null
+                    if (node.scope === SCOPE_APPLICATION) {
+                        try {
+                            // normally already known from start up. If not, this makes (or shares) a single lookup
+                            applicationId = await getOwnApplicationId()
+                        } catch (err) {
+                            if (err.code === ERROR_APPLICATION_SCOPE_NOT_SUPPORTED) {
+                                throw err
+                            }
+                            throw new Error(`Unable to get this instance's application from FlowFuse: ${err.message || err.code || 'unknown error'}`)
+                        }
+                    }
                     const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, null, applicationId)
                     // ↓ Useful for debugging ↓
                     // console.log(`🔗 LINK-OUT PUB ${topic}`)
@@ -1213,6 +1259,10 @@ module.exports = function (RED) {
             if (stopCheckingTarget) {
                 stopCheckingTarget()
                 stopCheckingTarget = null
+            }
+            if (stopWaitingForApplicationId) {
+                stopWaitingForApplicationId()
+                stopWaitingForApplicationId = null
             }
             try {
                 if (!mqtt.hasSubscriptions && !mqtt.closing) {

@@ -1192,6 +1192,98 @@ describe('project-link node', function () {
                 env.mqttStub.subscribe.called.should.be.false()
             })
 
+            describe('project link out with application scope', function () {
+                const outConfig = { topic, mode: 'link', broadcast: true, scope: 'application' }
+                const outTopic = `ff/v1/${TEAM_ID}/a/${APPLICATION_ID}/p/dev:${DEVICE_ID}/out/${topic}`
+
+                it('waits and retries until the application is known', async function () {
+                    const env = setup()
+                    asApplicationDevice(env)
+                    const getInstancesStub = stubUnreachable(2)
+                    const { node, nodeEvents } = createNode(env, 'project link out', outConfig)
+                    await flushPromises()
+                    node.status.calledWithMatch({ fill: 'yellow', text: 'waiting for FlowFuse' }).should.be.true()
+                    node.warn.callCount.should.equal(1)
+
+                    await clock.tickAsync(35 * 1000)
+                    await flushPromises()
+                    getInstancesStub.callCount.should.equal(2)
+                    await clock.tickAsync(66 * 1000)
+                    await flushPromises()
+                    getInstancesStub.callCount.should.equal(3)
+                    node.status.lastCall.calledWithMatch({}).should.be.true()
+                    node.warn.callCount.should.equal(1)
+
+                    // sending uses the stored values and makes no request
+                    await nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
+                    getInstancesStub.callCount.should.equal(3)
+                    should(env.mqttStub.publish.args[0][0]).equal(outTopic)
+                })
+
+                it('makes no request when sending once the application is known', async function () {
+                    const env = setup()
+                    asApplicationDevice(env)
+                    const getInstancesStub = stubInstances()
+                    const { nodeEvents } = createNode(env, 'project link out', outConfig)
+                    await flushPromises()
+                    getInstancesStub.callCount.should.equal(1)
+                    await nodeEvents.input({ payload: 'one' }, sinon.fake(), sinon.fake())
+                    await nodeEvents.input({ payload: 'two' }, sinon.fake(), sinon.fake())
+                    getInstancesStub.callCount.should.equal(1)
+                    env.mqttStub.publish.callCount.should.equal(2)
+                })
+
+                it('looks up once for a message sent while the application is unknown', async function () {
+                    const env = setup()
+                    asApplicationDevice(env)
+                    const getInstancesStub = stubUnreachable(1)
+                    const { nodeEvents } = createNode(env, 'project link out', outConfig)
+                    await flushPromises()
+                    getInstancesStub.callCount.should.equal(1)
+                    const done = sinon.fake()
+                    await nodeEvents.input({ payload: 'test' }, sinon.fake(), done)
+                    getInstancesStub.callCount.should.equal(2)
+                    should(done.args[0][0]).be.undefined()
+                    should(env.mqttStub.publish.args[0][0]).equal(outTopic)
+                })
+
+                it('errors once with a clear reason when the lookup fails at send time', async function () {
+                    const env = setup()
+                    asApplicationDevice(env)
+                    const getInstancesStub = stubInstances()
+                    getInstancesStub.rejects(new Error('connect ECONNREFUSED'))
+                    const { nodeEvents } = createNode(env, 'project link out', outConfig)
+                    await flushPromises()
+                    const done = sinon.fake()
+                    await nodeEvents.input({ payload: 'test' }, sinon.fake(), done)
+                    getInstancesStub.callCount.should.equal(2)
+                    done.calledOnce.should.be.true()
+                    done.args[0][0].message.should.equal("Unable to get this instance's application from FlowFuse: connect ECONNREFUSED")
+                    env.mqttStub.publish.called.should.be.false()
+                })
+
+                it('stops retrying when closed', async function () {
+                    const env = setup()
+                    asApplicationDevice(env)
+                    const getInstancesStub = stubUnreachable(1)
+                    const { nodeEvents } = createNode(env, 'project link out', outConfig)
+                    await flushPromises()
+                    nodeEvents.close(sinon.fake())
+                    await clock.tickAsync(10 * 60 * 1000)
+                    await flushPromises()
+                    getInstancesStub.callCount.should.equal(1)
+                })
+
+                it('does not look up the application for team broadcasts', async function () {
+                    const env = setup()
+                    const getInstancesStub = stubInstances()
+                    const { nodeEvents } = createNode(env, 'project link out', { topic, mode: 'link', broadcast: true })
+                    await flushPromises()
+                    await nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
+                    getInstancesStub.called.should.be.false()
+                })
+            })
+
             const checkedNodes = [
                 { type: 'project link in', kind: 'source', status: 'invalid source', config: { topic, broadcast: true, project: 'other-instance' } },
                 { type: 'project link out', kind: 'target', status: 'invalid target', config: { topic, mode: 'link', broadcast: false, project: 'other-instance' } },
