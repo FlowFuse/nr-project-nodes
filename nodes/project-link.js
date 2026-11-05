@@ -1172,15 +1172,16 @@ module.exports = function (RED) {
         let stopWaitingForApplicationId = null
         if (featureEnabled !== false && node.mode === 'link' && node.scope === SCOPE_APPLICATION) {
             let warned = false
+            let closed = false
             const restoreStatus = () => {
-                if (warned) {
+                if (warned && !closed) {
                     // restore the connection status hidden while waiting
                     warned = false
                     mqtt.registerStatus(node)
                     node.status(mqtt.connected ? { fill: 'green', shape: 'dot', text: 'connected' } : {})
                 }
             }
-            stopWaitingForApplicationId = waitForApplicationId({
+            const stopWaiting = waitForApplicationId({
                 resolve: () => {
                     stopWaitingForApplicationId = null
                     restoreStatus()
@@ -1188,10 +1189,12 @@ module.exports = function (RED) {
                 reject: err => {
                     stopWaitingForApplicationId = null
                     restoreStatus()
-                    node.warn(err.message)
+                    if (!closed) {
+                        node.warn(err.message)
+                    }
                 },
                 waiting: err => {
-                    if (!warned) {
+                    if (!warned && !closed) {
                         warned = true
                         mqtt.deregisterStatus(node) // keep the waiting status until the application is known
                         node.status({ fill: 'yellow', shape: 'ring', text: 'waiting for FlowFuse' })
@@ -1200,6 +1203,10 @@ module.exports = function (RED) {
                     }
                 }
             })
+            stopWaitingForApplicationId = () => {
+                closed = true
+                stopWaiting()
+            }
         }
 
         node.on('input', async function (msg, _send, done) {
