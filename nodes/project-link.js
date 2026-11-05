@@ -1170,6 +1170,7 @@ module.exports = function (RED) {
         // application broadcasts need the id of this instance's application. Learn it at start
         // (retrying until FlowFuse answers) so sending does not depend on the platform
         let stopWaitingForApplicationId = null
+        let applicationError = null
         if (featureEnabled !== false && node.mode === 'link' && node.scope === SCOPE_APPLICATION) {
             let warned = false
             const restoreStatus = () => {
@@ -1187,8 +1188,10 @@ module.exports = function (RED) {
                 },
                 reject: err => {
                     stopWaitingForApplicationId = null
-                    restoreStatus()
-                    node.warn(err.message)
+                    applicationError = err // FlowFuse answered, so this will not change: sends use this reason
+                    mqtt.deregisterStatus(node)
+                    node.status({ fill: 'red', shape: 'dot', text: 'not supported' })
+                    node.error(err)
                 },
                 waiting: err => {
                     if (!warned) {
@@ -1231,6 +1234,9 @@ module.exports = function (RED) {
                 } else if (node.mode === 'link') {
                     // known from start up. Sending never starts a request, but a message sent
                     // while the start up lookup is running waits for it to finish
+                    if (node.scope === SCOPE_APPLICATION && applicationError) {
+                        throw applicationError
+                    }
                     if (node.scope === SCOPE_APPLICATION && (!ownApplicationId || !supportsApplications)) {
                         await instancesLookup
                     }

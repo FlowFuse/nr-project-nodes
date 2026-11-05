@@ -1268,6 +1268,22 @@ describe('project-link node', function () {
                     should(env.mqttStub.publish.args[0][0]).equal(outTopic)
                 })
 
+                it('shows an error and fails sends when the platform does not support application scope', async function () {
+                    const env = setup()
+                    asApplicationDevice(env)
+                    const getInstancesStub = stubInstances({ supportsApplications: false })
+                    const { node, nodeEvents } = createNode(env, 'project link out', outConfig)
+                    await flushPromises()
+                    node.status.calledWithMatch({ fill: 'red', text: 'not supported' }).should.be.true()
+                    node.error.calledOnce.should.be.true()
+                    const done = sinon.fake()
+                    await nodeEvents.input({ payload: 'test' }, sinon.fake(), done)
+                    done.args[0][0].should.have.property('code', 'APPLICATION_SCOPE_NOT_SUPPORTED')
+                    done.args[0][0].message.should.match(/not supported by this version of FlowFuse/)
+                    getInstancesStub.callCount.should.equal(1)
+                    env.mqttStub.publish.called.should.be.false()
+                })
+
                 it('errors without a request for messages sent while the application is unknown', async function () {
                     const env = setup()
                     asApplicationDevice(env)
