@@ -226,7 +226,7 @@ module.exports = function (RED) {
     const TARGET_TYPE_STATIC = 'static'
 
     // an instance id (uuid) or a remote instance id (`dev:<id>`). Anything else would change the shape of the topic
-    const VALID_TARGET_ID = /^[A-Za-z0-9_:-]+$/
+    const VALID_TARGET_ID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|dev:[A-Za-z0-9]+)$/
 
     /**
      * Get the id of the target of a node whose target is evaluated per message (`msg` or `env`).
