@@ -28,6 +28,7 @@ module.exports = function (RED) {
     const INSTANCES_RETRY_MIN = 30 * 1000 // first retry after 30 seconds (+/- jitter)
     const INSTANCES_RETRY_MAX = 5 * 60 * 1000 // back off to 5 minutes (+/- jitter)
     const ERROR_APPLICATION_SCOPE_NOT_SUPPORTED = 'APPLICATION_SCOPE_NOT_SUPPORTED'
+    const ERROR_APPLICATION_NOT_KNOWN = 'APPLICATION_NOT_KNOWN'
     // It is not unreasonable to expect `projectID` and `applicationID` are set for an instance
     // owned device, however an application owned device should not have a projectID.
     // therefore, assume project owned if `projectID` is set
@@ -93,20 +94,15 @@ module.exports = function (RED) {
     }
 
     /**
-     * Get the id of the application this instance belongs to.
-     * Devices know their application from settings, but the platform must also support
-     * application scoped topics, so this always requires `supportsApplications`.
-     * If FlowFuse could not be reached, the request error is thrown. If FlowFuse answered but
-     * does not support application scope, the error has `code` `APPLICATION_SCOPE_NOT_SUPPORTED`
-     * @returns {Promise<string>} the application id
+     * Get the id of the application this instance belongs to, without contacting FlowFuse.
+     * Devices know their application from settings, but the platform must also have confirmed it
+     * supports application scoped topics. Both are learned by `waitForApplicationId` at start up.
+     * @returns {string} the application id
      */
-    async function getOwnApplicationId () {
+    function getOwnApplicationId () {
         if (!ownApplicationId || !supportsApplications) {
-            await getInstances()
-        }
-        if (!ownApplicationId || !supportsApplications) {
-            const err = new Error('Application scoped messages are not supported by this version of FlowFuse')
-            err.code = ERROR_APPLICATION_SCOPE_NOT_SUPPORTED
+            const err = new Error('Unable to send an application broadcast: the application is not known yet, waiting for FlowFuse')
+            err.code = ERROR_APPLICATION_NOT_KNOWN
             throw err
         }
         return ownApplicationId
@@ -1233,18 +1229,8 @@ module.exports = function (RED) {
                     }
                     done()
                 } else if (node.mode === 'link') {
-                    let applicationId = null
-                    if (node.scope === SCOPE_APPLICATION) {
-                        try {
-                            // normally already known from start up. If not, this makes (or shares) a single lookup
-                            applicationId = await getOwnApplicationId()
-                        } catch (err) {
-                            if (err.code === ERROR_APPLICATION_SCOPE_NOT_SUPPORTED) {
-                                throw err
-                            }
-                            throw new Error(`Unable to get this instance's application from FlowFuse: ${err.message || err.code || 'unknown error'}`)
-                        }
-                    }
+                    // known from start up. Sending never contacts FlowFuse
+                    const applicationId = node.scope === SCOPE_APPLICATION ? getOwnApplicationId() : null
                     const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, null, applicationId)
                     // ↓ Useful for debugging ↓
                     // console.log(`🔗 LINK-OUT PUB ${topic}`)
