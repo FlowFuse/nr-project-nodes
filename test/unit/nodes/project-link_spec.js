@@ -875,7 +875,9 @@ describe('project-link node', function () {
                 ['not a string', { payload: 'test', target: 123 }],
                 ['empty', { payload: 'test', target: '' }],
                 ['not an instance id', { payload: 'test', target: 'a/b' }],
-                ['a topic wildcard', { payload: 'test', target: '+' }]
+                ['a topic wildcard', { payload: 'test', target: '+' }],
+                ['a remote instance without an id', { payload: 'test', target: 'dev:' }],
+                ['not a full instance id', { payload: 'test', target: 'x-' }]
             ]) {
                 it(`should error when the target is ${name}`, async function () {
                     const { env, nodeEvents } = create('project link out', { mode: 'link', targetType: 'msg', targetValue: 'target' })
