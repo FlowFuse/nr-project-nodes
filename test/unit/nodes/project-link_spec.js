@@ -10,7 +10,7 @@ const InstancesApi = require('../../../lib/InstancesApi.js')
 
 const TEAM_ID = 'ABCD5678'
 const flushPromises = () => new Promise(resolve => setImmediate(resolve))
-const PROJECT_ID = '1234-5678-9012-9876abcdef12'
+const PROJECT_ID = '12345678-1234-5678-9012-9876abcdef12'
 describe('project-link node', function () {
     afterEach(function () {
         delete process.env.http_proxy
@@ -798,7 +798,7 @@ describe('project-link node', function () {
     })
 
     describe('Dynamic target', function () {
-        const OTHER_ID = '5555-6666-7777-8888abcdef12'
+        const OTHER_ID = '12345678-5555-6666-7777-8888abcdef12'
         const DEVICE_ID = 'dev:abcdef'
         const topic = 'cloud/project-nodes-test/dynamic'
         const instances = [
