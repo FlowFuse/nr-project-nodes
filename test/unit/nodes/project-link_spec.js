@@ -1181,6 +1181,20 @@ describe('project-link node', function () {
                 env.mqttStub.subscribe.callCount.should.equal(2)
             })
 
+            it('project link in does not subscribe when closed while the lookup is running', async function () {
+                const env = setup()
+                asApplicationDevice(env)
+                const getInstancesStub = stubInstances()
+                let finish
+                getInstancesStub.onCall(0).returns(new Promise(resolve => { finish = resolve }))
+                const { nodeEvents } = createNode(env, 'project link in', inConfig)
+                await flushPromises()
+                nodeEvents.close(sinon.fake())
+                finish({ count: 0, instances: [], applications: [], self: null, supportsApplications: true })
+                await flushPromises()
+                env.mqttStub.subscribe.called.should.be.false()
+            })
+
             it('project link in stops retrying when closed', async function () {
                 const env = setup()
                 asApplicationDevice(env)

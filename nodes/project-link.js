@@ -200,8 +200,12 @@ module.exports = function (RED) {
      */
     function checkTarget (node, kind, statusText, check) {
         let warned = false
-        return waitForInstances({
+        let closed = false
+        const stopWaiting = waitForInstances({
             resolve: data => {
+                if (closed) {
+                    return
+                }
                 const error = check(data)
                 if (error) {
                     mqtt.deregisterStatus(node) // prevent connections/disconnections from updating the status (this node is in error!)
@@ -210,13 +214,17 @@ module.exports = function (RED) {
                 }
             },
             waiting: err => {
-                if (!warned) {
+                if (!warned && !closed) {
                     warned = true
                     // connection errors (e.g. ECONNREFUSED to `localhost`) can have an empty message
                     node.warn(`Unable to check ${kind} '${node.project}' with FlowFuse, will keep retrying: ${err.message || err.code || 'unknown error'}`)
                 }
             }
         })
+        return function () {
+            closed = true
+            stopWaiting()
+        }
     }
 
     function jsonReplacer (_key, value) {
@@ -1029,9 +1037,13 @@ module.exports = function (RED) {
             if (node.scope === SCOPE_APPLICATION) {
                 // application scoped topics need the id of this instance's application
                 let warned = false
-                stopWaitingForApplicationId = waitForApplicationId({
+                let closed = false
+                const stopWaiting = waitForApplicationId({
                     resolve: applicationId => {
                         stopWaitingForApplicationId = null
+                        if (closed) {
+                            return
+                        }
                         if (warned) {
                             // restore the connection status hidden while waiting
                             mqtt.registerStatus(node)
@@ -1046,11 +1058,14 @@ module.exports = function (RED) {
                     },
                     reject: err => {
                         stopWaitingForApplicationId = null
+                        if (closed) {
+                            return
+                        }
                         node.status({ fill: 'red', shape: 'dot', text: 'subscribe error' })
                         node.error(err)
                     },
                     waiting: err => {
-                        if (!warned) {
+                        if (!warned && !closed) {
                             warned = true
                             mqtt.deregisterStatus(node) // keep the waiting status until the application is known
                             node.status({ fill: 'yellow', shape: 'ring', text: 'waiting for FlowFuse' })
@@ -1059,6 +1074,10 @@ module.exports = function (RED) {
                         }
                     }
                 })
+                stopWaitingForApplicationId = () => {
+                    closed = true
+                    stopWaiting()
+                }
             } else {
                 subscribe()
                     .then(_result => {})
