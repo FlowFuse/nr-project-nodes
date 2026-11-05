@@ -1229,7 +1229,11 @@ module.exports = function (RED) {
                     }
                     done()
                 } else if (node.mode === 'link') {
-                    // known from start up. Sending never contacts FlowFuse
+                    // known from start up. Sending never starts a request, but a message sent
+                    // while the start up lookup is running waits for it to finish
+                    if (node.scope === SCOPE_APPLICATION && (!ownApplicationId || !supportsApplications)) {
+                        await instancesLookup
+                    }
                     const applicationId = node.scope === SCOPE_APPLICATION ? getOwnApplicationId() : null
                     const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, null, applicationId)
                     // ↓ Useful for debugging ↓

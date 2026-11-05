@@ -1236,6 +1236,24 @@ describe('project-link node', function () {
                     env.mqttStub.publish.callCount.should.equal(2)
                 })
 
+                it('waits for the start up lookup when a message is sent while it is running', async function () {
+                    const env = setup()
+                    asApplicationDevice(env)
+                    const getInstancesStub = stubInstances()
+                    let finish
+                    getInstancesStub.onCall(0).returns(new Promise(resolve => { finish = resolve }))
+                    const { nodeEvents } = createNode(env, 'project link out', outConfig)
+                    const done = sinon.fake()
+                    const sending = nodeEvents.input({ payload: 'test' }, sinon.fake(), done)
+                    await flushPromises()
+                    done.called.should.be.false()
+                    finish({ count: 0, instances: [], applications: [], self: null, supportsApplications: true })
+                    await sending
+                    getInstancesStub.callCount.should.equal(1)
+                    should(done.args[0][0]).be.undefined()
+                    should(env.mqttStub.publish.args[0][0]).equal(outTopic)
+                })
+
                 it('errors without a request for messages sent while the application is unknown', async function () {
                     const env = setup()
                     asApplicationDevice(env)
