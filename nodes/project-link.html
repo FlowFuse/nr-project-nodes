@@ -22,6 +22,15 @@
         width: calc(100% - 125px);
         max-width: none;
         box-sizing: border-box;
+        /* the tray is sized from its content when it opens, so a long tip that is already
+           showing would set a minimum width the user cannot shrink below */
+        contain: inline-size;
+        /* just under the default so the tips do not wrap at the narrowest tray width */
+        font-size: 12.5px;
+    }
+    #dialog-form > div.form-row.ff-project-link-tip-row > .form-tips ul {
+        margin: 4px 0;
+        padding-left: 20px;
     }
 </style>
 
@@ -89,6 +98,11 @@
             <label for="ff-project-link-radio-input-direct">Send message to instance</label>
         </span>
     </div>
+    <div class="form-row ff-project-link-targettype-row">
+        <label for="node-input-targetValue"><i class="fa fa-sign-out"></i> <span>Target</span></label>
+        <input type="hidden" id="node-input-targetType">
+        <input type="text" id="node-input-targetValue" style="width: calc(100% - 125px)">
+    </div>
     <div class="form-row ff-project-link-filter-row">
         <label for="ff-project-link-application-filter"><i class="fa fa-cubes"></i> <span>Application</span></label>
         <select id="ff-project-link-application-filter" class="ff-project-link-input-width"></select>
@@ -130,14 +144,22 @@
         <input type="text" id="node-input-timeout" placeholder="30" style="width: 80px; margin-right: 5px;">
         <span data-i18n="inject.seconds">sec</span>
     </div>
+    <div class="form-row ff-project-link-targettype-row">
+        <label for="node-input-targetValue"><i class="fa fa-sign-out"></i> <span>Target</span></label>
+        <input type="hidden" id="node-input-targetType">
+        <input type="text" id="node-input-targetValue" style="width: calc(100% - 125px)">
+    </div>
     <div class="form-row ff-project-link-filter-row">
         <label for="ff-project-link-application-filter"><i class="fa fa-cubes"></i> <span>Application</span></label>
         <select id="ff-project-link-application-filter" class="ff-project-link-input-width"></select>
     </div>
     <div class="form-row ff-project-link-target-row">
-        <label for="node-input-projectList"><i class="fa fa-sign-out"></i> <span>Target</span></label>
+        <label for="node-input-projectList"><i class="fa fa-cube"></i> <span>Instance</span></label>
         <select id="node-input-projectList" class="ff-project-link-input-width">
         </select>
+    </div>
+    <div class="form-row ff-project-link-tip-row">
+        <div class="form-tips" id="ff-project-link-scope-tip"></div>
     </div>
     <div class="form-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Topic</span></label>
@@ -148,6 +170,7 @@
 <script type="text/javascript">
 /* global RED, $ */
 (function () {
+    const TARGET_TYPE_STATIC = 'static' // the target is the instance selected in the editor
     const SCOPE_TEAM = 'team'
     const SCOPE_APPLICATION = 'application'
     // Application broadcasts are saved as `broadcast: 'application'` rather than `true` on project link
@@ -179,6 +202,27 @@
         return /^(?:(?:[^/$+#\b\f\n\r\t\v\0]+)(?:\/(?:[^/$+#\b\f\n\r\t\v\0]+?))*)$/.test(subTopic)
     }
 
+    /**
+     * Validate the property a dynamic target is read from
+     * @param {string} value - the msg property or environment variable name
+     * @param {object} [opt] - passed by Node-RED when it wants a reason, returned as the validation message
+     * @returns {boolean|string} `true` if valid, otherwise `false` (or the reason when `opt` is given)
+     */
+    function isValidTargetValue (value, opt) {
+        if (this.mode === 'return' || this.broadcast === true || this.broadcast === 'true' || this.broadcast === BROADCAST_APPLICATION) {
+            return true
+        }
+        if (this.targetType && this.targetType !== TARGET_TYPE_STATIC && !value) {
+            return opt ? 'No target property specified' : false
+        }
+        return true
+    }
+
+    const DYNAMIC_TARGET_TIP = 'The id of the hosted or remote instance to send to.' +
+        '<ul><li>Hosted instance: <code>&lt;instance id&gt;</code></li>' +
+        '<li>Remote instance: <code>dev:&lt;hashid&gt;</code></li></ul>' +
+        'An error is raised if it is missing or not a valid id.'
+
     /** Compare names for sorting, ignoring case (and treating numbers by value) */
     function compareNames (a, b) {
         return (a || '').localeCompare(b || '', undefined, { sensitivity: 'base', numeric: true })
@@ -192,6 +236,9 @@
      */
     function isValidProject (projectId, opt) {
         const invalid = (reason) => opt ? reason : false
+        if (this && this.targetType && this.targetType !== TARGET_TYPE_STATIC) {
+            return true // the instance is chosen when a message is sent
+        }
         // this is a simple check to see if the selected option has class ff-project-link-bad-option
         const projectList = $('#node-input-projectList')
         if (!projectId) {
@@ -219,6 +266,7 @@
         let isReturnMode = node.mode === 'return'
         let scope = (node.scope === SCOPE_APPLICATION || node.broadcast === BROADCAST_APPLICATION) ? SCOPE_APPLICATION : SCOPE_TEAM
         let selected = node.project
+        let dynamicTargetType = node.targetType || TARGET_TYPE_STATIC
         /** Target data from the runtime. `null` until loaded */
         let data = null
 
@@ -232,6 +280,26 @@
         $('#node-input-mode').val(node.mode)
         $('#node-input-scope').val(scope)
         $('input:radio[name="ff-project-link-broadcast"]').val([isBroadcast.toString()])
+
+        // the target of an out or call node can be read from a msg property or environment variable
+        if (nodeType !== 'project link in') {
+            $('#node-input-targetType').val(dynamicTargetType)
+            $('#node-input-targetValue').typedInput({
+                types: [
+                    { value: TARGET_TYPE_STATIC, label: 'Selected instance', hasValue: false },
+                    'msg',
+                    'env'
+                ],
+                typeField: '#node-input-targetType'
+            })
+            $('#node-input-targetValue').on('change', function (_event, type) {
+                dynamicTargetType = type || $('#node-input-targetType').val() || TARGET_TYPE_STATIC
+                if (dynamicTargetType === 'msg' && !$(this).typedInput('value')) {
+                    $(this).typedInput('value', 'target')
+                }
+                updateUI()
+            })
+        }
 
         // watch for switch between broadcast and p2p
         $('input:radio[name="ff-project-link-broadcast"]').on('change', function (e) {
@@ -396,6 +464,8 @@
             const filterRow = $('.ff-project-link-filter-row')
             const targetRow = $('.ff-project-link-target-row')
             const scopeRow = $('.ff-project-link-scope-row')
+            const targetTypeRow = $('.ff-project-link-targettype-row')
+            const isDynamicTarget = dynamicTargetType !== TARGET_TYPE_STATIC
             const tipRow = $('.ff-project-link-tip-row')
             let tip = ''
 
@@ -404,16 +474,20 @@
                 $('.ff-project-link-list-row').hide()
                 filterRow.hide()
                 targetRow.hide()
+                targetTypeRow.hide()
                 scopeRow.hide()
                 projectList.prop('disabled', true)
             } else if (nodeType === 'project link out') {
                 $('.ff-project-link-topic-row').show()
                 $('.ff-project-link-list-row').show()
-                filterRow.toggle(!isBroadcast && showApplications)
-                targetRow.toggle(!isBroadcast)
+                targetTypeRow.toggle(!isBroadcast)
+                filterRow.toggle(!isBroadcast && !isDynamicTarget && showApplications)
+                targetRow.toggle(!isBroadcast && !isDynamicTarget)
                 scopeRow.toggle(isBroadcast && showApplications)
                 projectList.prop('disabled', isBroadcast ? true : (data ? null : true))
-                if (isBroadcast && showApplications) {
+                if (!isBroadcast && isDynamicTarget) {
+                    tip = DYNAMIC_TARGET_TIP
+                } else if (isBroadcast && showApplications) {
                     tip = isApplicationScope()
                         ? 'Only instances in this application that listen for <b>application</b> broadcasts will receive the message.'
                         : 'Any instance in this team that listens for <b>team</b> broadcasts can receive the message.'
@@ -437,6 +511,7 @@
                 scopeRow.toggle(isBroadcast && showApplications)
                 filterRow.toggle(isBroadcast && showApplications && !isApplicationScope())
                 targetRow.toggle(isBroadcast)
+                targetTypeRow.hide()
                 projectList.prop('disabled', isBroadcast && data ? null : true)
                 if (isBroadcast && showApplications) {
                     tip = isApplicationScope()
@@ -446,9 +521,13 @@
             } else {
                 $('.ff-project-link-topic-row').show()
                 $('.ff-project-link-list-row').show()
-                filterRow.toggle(showApplications)
-                targetRow.show()
+                targetTypeRow.show()
+                filterRow.toggle(showApplications && !isDynamicTarget)
+                targetRow.toggle(!isDynamicTarget)
                 projectList.prop('disabled', data ? null : true)
+                if (isDynamicTarget) {
+                    tip = DYNAMIC_TARGET_TIP
+                }
             }
 
             $('#ff-project-link-scope-tip').html(tip)
@@ -511,7 +590,7 @@
                         return true // if we are listening for broadcast messages from all, we don't need a project id
                     }
                     // otherwise, we need a valid project id
-                    return isValidProject(v, opt)
+                    return isValidProject.call(this, v, opt)
                 }
             },
             broadcast: { value: false, required: true },
@@ -549,6 +628,8 @@
             mode: { value: 'link' }, // link || return
             broadcast: { value: false, required: true },
             scope: { value: SCOPE_TEAM }, // team || application (only used when broadcast is true)
+            targetType: { value: TARGET_TYPE_STATIC }, // static || msg || env
+            targetValue: { value: '', validate: isValidTargetValue },
             project: {
                 value: '',
                 validate: function (v, opt) {
@@ -613,10 +694,12 @@
         color: '#87D8CF',
         defaults: {
             name: { value: '' },
+            targetType: { value: TARGET_TYPE_STATIC }, // static || msg || env
+            targetValue: { value: '', validate: isValidTargetValue },
             project: { value: '', validate: isValidProject }, // isValidProject handles empty, so its reason is shown
             topic: { value: '', required: true, validate: isValidPublishTopic },
             timeout: {
-                value: '30',
+                value: '5',
                 label: RED._('node-red:link.timeout'),
                 validate: RED.validators.number(true)
             }
@@ -724,6 +807,21 @@
         subscribers.
     </p>
     <p>
+        The target can be chosen when a message is sent: set <b>Target</b> to <code>msg.</code>
+        and a property name (for example <code>msg.target</code>), or to <code>env</code> and the name
+        of an environment variable. An <code>env</code> value can also be a template filled
+        in from several variables, for example <code>${PREFIX}-${NAME}</code>.
+        The value must be the id of an instance
+        or remote instance in this team. If it is missing or not a valid id, an error
+        is raised that can be caught with a Catch node. FlowFuse is not asked whether the
+        instance exists, so a message sent to an unknown instance is not delivered.
+    </p>
+    <p>
+        A remote instance is identified by <code>dev:</code> followed by its id. For example, a Function node can set
+        <code>msg.target = `dev:${deviceId}`</code>, or the <code>env</code> value can be
+        <code>dev:${TARGET_DEVICE_ID}</code>.
+    </p>
+    <p>
         When configured to return the message to the previous Project Call node,
         the node requires the property <code>msg.projectLink.callStack</code> to
         be present. This property is set by the Project In node when it receives
@@ -766,6 +864,21 @@
         like an MQTT topic - allowing instances to send messages targeting different
         subscribers.
     </p>
+    <p>
+        The target can be chosen when a message is sent: set <b>Target</b> to <code>msg.</code>
+        and a property name (for example <code>msg.target</code>), or to <code>env</code> and the name
+        of an environment variable. An <code>env</code> value can also be a template filled
+        in from several variables, for example <code>${PREFIX}-${NAME}</code>.
+        The value must be the id of an instance
+        or remote instance in this team. If it is missing or not a valid id, an error
+        is raised that can be caught with a Catch node. FlowFuse is not asked whether the
+        instance exists, so a call to an unknown instance fails when the timeout expires.
+    </p>
+    <p>
+        A remote instance is identified by <code>dev:</code> followed by its id. For example, a Function node can set
+        <code>msg.target = `dev:${deviceId}`</code>, or the <code>env</code> value can be
+        <code>dev:${TARGET_DEVICE_ID}</code>.
+    </p>
     <h3>Limitations</h3>
     <p>
         The target can be a hosted instance, or a remote instance assigned to an application,
@@ -777,7 +890,7 @@
         a remote instance can make calls, but cannot receive them.
     </p>
     <p>
-        The default timeout is 30 seconds. The target instance must be running and
+        New nodes default to a timeout of 5 seconds (30 seconds if the field is left empty). The target instance must be running and
         have a <code>project link in</code> node listening on the same topic, so
         logic called this way is unavailable whenever the link to the platform is down.
     </p>
