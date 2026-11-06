@@ -28,6 +28,7 @@ module.exports = function (RED) {
     const INSTANCES_RETRY_MIN = 30 * 1000 // first retry after 30 seconds (+/- jitter)
     const INSTANCES_RETRY_MAX = 5 * 60 * 1000 // back off to 5 minutes (+/- jitter)
     const ERROR_APPLICATION_SCOPE_NOT_SUPPORTED = 'APPLICATION_SCOPE_NOT_SUPPORTED'
+    const ERROR_APPLICATION_NOT_KNOWN = 'APPLICATION_NOT_KNOWN'
     // It is not unreasonable to expect `projectID` and `applicationID` are set for an instance
     // owned device, however an application owned device should not have a projectID.
     // therefore, assume project owned if `projectID` is set
@@ -93,20 +94,15 @@ module.exports = function (RED) {
     }
 
     /**
-     * Get the id of the application this instance belongs to.
-     * Devices know their application from settings, but the platform must also support
-     * application scoped topics, so this always requires `supportsApplications`.
-     * If FlowFuse could not be reached, the request error is thrown. If FlowFuse answered but
-     * does not support application scope, the error has `code` `APPLICATION_SCOPE_NOT_SUPPORTED`
-     * @returns {Promise<string>} the application id
+     * Get the id of the application this instance belongs to, without contacting FlowFuse.
+     * Devices know their application from settings, but the platform must also have confirmed it
+     * supports application scoped topics. Both are learned by `waitForApplicationId` at start up.
+     * @returns {string} the application id
      */
-    async function getOwnApplicationId () {
+    function getOwnApplicationId () {
         if (!ownApplicationId || !supportsApplications) {
-            await getInstances()
-        }
-        if (!ownApplicationId || !supportsApplications) {
-            const err = new Error('Application scoped messages are not supported by this version of FlowFuse')
-            err.code = ERROR_APPLICATION_SCOPE_NOT_SUPPORTED
+            const err = new Error('Unable to send an application broadcast: the application is not known yet, waiting for FlowFuse')
+            err.code = ERROR_APPLICATION_NOT_KNOWN
             throw err
         }
         return ownApplicationId
@@ -1200,6 +1196,44 @@ module.exports = function (RED) {
             })
         }
 
+        // application broadcasts need the id of this instance's application. Learn it at start
+        // (retrying until FlowFuse answers) so sending does not depend on the platform
+        let stopWaitingForApplicationId = null
+        let applicationError = null
+        if (featureEnabled !== false && node.mode === 'link' && node.scope === SCOPE_APPLICATION) {
+            let warned = false
+            const restoreStatus = () => {
+                if (warned) {
+                    // restore the connection status hidden while waiting
+                    warned = false
+                    mqtt.registerStatus(node)
+                    node.status(mqtt.connected ? { fill: 'green', shape: 'dot', text: 'connected' } : {})
+                }
+            }
+            stopWaitingForApplicationId = waitForApplicationId({
+                resolve: () => {
+                    stopWaitingForApplicationId = null
+                    restoreStatus()
+                },
+                reject: err => {
+                    stopWaitingForApplicationId = null
+                    applicationError = err // FlowFuse answered, so this will not change: sends use this reason
+                    mqtt.deregisterStatus(node)
+                    node.status({ fill: 'red', shape: 'dot', text: 'not supported' })
+                    node.error(err)
+                },
+                waiting: err => {
+                    if (!warned) {
+                        warned = true
+                        mqtt.deregisterStatus(node) // keep the waiting status until the application is known
+                        node.status({ fill: 'yellow', shape: 'ring', text: 'waiting for FlowFuse' })
+                        // connection errors (e.g. ECONNREFUSED to `localhost`) can have an empty message
+                        node.warn(`Unable to get this instance's application from FlowFuse, will keep retrying: ${err.message || err.code || 'unknown error'}`)
+                    }
+                }
+            })
+        }
+
         node.on('input', async function (msg, _send, done) {
             if (featureEnabled === false) {
                 done()
@@ -1227,7 +1261,15 @@ module.exports = function (RED) {
                     }
                     done()
                 } else if (node.mode === 'link') {
-                    const applicationId = node.scope === SCOPE_APPLICATION ? await getOwnApplicationId() : null
+                    // known from start up. Sending never starts a request, but a message sent
+                    // while the start up lookup is running waits for it to finish
+                    if (node.scope === SCOPE_APPLICATION && applicationError) {
+                        throw applicationError
+                    }
+                    if (node.scope === SCOPE_APPLICATION && (!ownApplicationId || !supportsApplications)) {
+                        await instancesLookup
+                    }
+                    const applicationId = node.scope === SCOPE_APPLICATION ? getOwnApplicationId() : null
                     const project = (!node.broadcast && node.targetType !== TARGET_TYPE_STATIC) ? resolveTarget(node, msg) : node.project
                     const topic = buildLinkTopic(node, project, node.subTopic, node.broadcast, null, applicationId)
                     // ↓ Useful for debugging ↓
@@ -1243,6 +1285,10 @@ module.exports = function (RED) {
             if (stopCheckingTarget) {
                 stopCheckingTarget()
                 stopCheckingTarget = null
+            }
+            if (stopWaitingForApplicationId) {
+                stopWaitingForApplicationId()
+                stopWaitingForApplicationId = null
             }
             try {
                 if (!mqtt.hasSubscriptions && !mqtt.closing) {
