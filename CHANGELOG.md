@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [0.8.0](https://github.com/FlowFuse/nr-project-nodes/compare/v0.7.9...v0.8.0) (2026-11-06)
+
+
+### Features
+
+* Make project link nodes application aware ([#296](https://github.com/FlowFuse/nr-project-nodes/issues/296)) ([e2c90b2](https://github.com/FlowFuse/nr-project-nodes/commit/e2c90b2fff3a897f05e9ccf11e23a62d8f53c5f3))
+
+
+### Bug Fixes
+
+* Resolve Application ID when node starts instead of on message ([#309](https://github.com/FlowFuse/nr-project-nodes/issues/309)) ([2564131](https://github.com/FlowFuse/nr-project-nodes/commit/2564131e37ca2b9961bc2a9b2500a2dad0cec7c8))
+* Retry project link source/target checks when FlowFuse is unreachable ([#299](https://github.com/FlowFuse/nr-project-nodes/issues/299)) ([65f6c62](https://github.com/FlowFuse/nr-project-nodes/commit/65f6c62a374984ed44438adb9060ae0723f37a13))
+
 ## [0.7.9](https://github.com/FlowFuse/nr-project-nodes/compare/v0.7.8...v0.7.9) (2026-08-13)
 
 
