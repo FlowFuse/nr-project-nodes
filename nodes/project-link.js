@@ -1267,6 +1267,8 @@ module.exports = function (RED) {
                         throw applicationError
                     }
                     if (node.scope === SCOPE_APPLICATION && (!ownApplicationId || !supportsApplications)) {
+                        // null when no lookup is running & awaiting a null is a no-op (safely ignored)
+                        // getOwnApplicationId below throws if the application is still unknown
                         await instancesLookup
                     }
                     const applicationId = node.scope === SCOPE_APPLICATION ? getOwnApplicationId() : null
