@@ -1127,6 +1127,53 @@ describe('project-link node', function () {
                 const { env, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'env', topic: 'some/${TEST_LINK_DEVICE}/status' })
                 await nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
                 env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${OTHER_ID}/in/some/device-1/status`)
+                // the call stack holds the topic that was used, not the template
+                const pubMessage = JSON.parse(env.mqttStub.publish.args[0][1])
+                pubMessage.projectLink.callStack[0].should.have.property('topic', 'some/device-1/status')
+            })
+            it('should put the topic of a dynamic target and topic in the call stack', async function () {
+                const { env, nodeEvents } = create('project link call', { targetType: 'msg', targetValue: 'target', topicType: 'msg', topic: 'topic' })
+                await nodeEvents.input({ payload: 'test', target: OTHER_ID, topic: 'x/y' }, sinon.fake(), sinon.fake())
+                const pubMessage = JSON.parse(env.mqttStub.publish.args[0][1])
+                pubMessage.projectLink.callStack[0].should.have.property('topic', 'x/y')
+            })
+            it('should put the response prefix it listens on in the call stack in HA mode', async function () {
+                const env = setup({ haMode: true })
+                InstancesApi.InstancesApi = sinon.stub().returns({ getInstances: sinon.stub().resolves({ count: 0, instances: [] }) })
+                projectLinkPackage(env.RED)
+                const events = {}
+                const node = { on: (event, cb) => { events[event] = cb }, error: sinon.fake(), warn: sinon.fake(), status: sinon.fake(), type: 'project link call' }
+                env.nodes['project link call'].NodeConstructor.call(node, { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                await events.input({ payload: 'test', topic: 'x/y' }, sinon.fake(), sinon.fake())
+                const entry = JSON.parse(env.mqttStub.publish.args[0][1]).projectLink.callStack[0]
+                entry.response.should.match(/^res-[0-9a-f]{8}$/)
+                node.responseTopic.should.equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/${entry.response}/+/#`)
+            })
+            it('should receive the reply that a return node sends for its call', async function () {
+                const env = setup()
+                InstancesApi.InstancesApi = sinon.stub().returns({ getInstances: sinon.stub().resolves({ count: 0, instances: [] }) })
+                projectLinkPackage(env.RED)
+                const make = (type, config) => {
+                    const events = {}
+                    const node = { on: (event, cb) => { events[event] = cb }, error: sinon.fake(), warn: sinon.fake(), status: sinon.fake(), type }
+                    env.nodes[type].NodeConstructor.call(node, { timeout: 0.05, ...config })
+                    return events
+                }
+                const call = make('project link call', { project: PROJECT_ID, topicType: 'msg', topic: 'topic' })
+                const back = make('project link out', { mode: 'return' })
+                const send = sinon.fake()
+                await call.input({ payload: 'test', topic: 'x/y' }, send, sinon.fake())
+                // the call arrives at the other end with its call stack, and is returned
+                const received = JSON.parse(env.mqttStub.publish.args[0][1])
+                received.payload = 'reply'
+                await back.input(received, sinon.fake(), sinon.fake())
+                const [replyTopic, replyMessage, replyOptions] = env.mqttStub.publish.args[1]
+                replyTopic.should.equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/x/y`)
+                // deliver it as the broker would, to the filter the call node listens on
+                const onMessage = env.mqttStub.on.args.find(args => args[0] === 'message')[1]
+                onMessage(replyTopic, Buffer.from(replyMessage), { properties: { correlationData: Buffer.from(replyOptions.properties.correlationData) } })
+                send.calledOnce.should.be.true()
+                send.args[0][0].should.have.property('payload', 'reply')
             })
             it('should send the response of a call on any topic to the message that made the call', async function () {
                 const { env, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
@@ -1166,6 +1213,22 @@ describe('project-link node', function () {
                 onMessage(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/x/y`, response, { properties: { correlationData: Buffer.from(eventId) } })
                 send.calledOnce.should.be.true()
                 send.args[0][0].should.have.property('payload', 'reply')
+            })
+            it('should ignore a response to its call that arrives on another topic', async function () {
+                const { env, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                const send = sinon.fake()
+                await nodeEvents.input({ payload: 'test', topic: 'x/y' }, send, sinon.fake())
+                const eventId = JSON.parse(env.mqttStub.publish.args[0][1]).projectLink.callStack[0].eventId
+                const onMessage = env.mqttStub.on.args.find(args => args[0] === 'message')[1]
+                const response = Buffer.from(JSON.stringify({ payload: 'reply', projectLink: {} }))
+                onMessage(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/x/z`, response, { properties: { correlationData: Buffer.from(eventId) } })
+                send.called.should.be.false()
+            })
+            it('should not report an unreadable response to a call it did not make', async function () {
+                const { env, node } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                const onMessage = env.mqttStub.on.args.find(args => args[0] === 'message')[1]
+                onMessage(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/x/y`, Buffer.from('not json'), { properties: { correlationData: Buffer.from('another') } })
+                node.error.called.should.be.false()
             })
             it('should ignore a response to another call', async function () {
                 const { env, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })

@@ -1406,8 +1406,10 @@ module.exports = function (RED) {
 
         function onSub (err, topic, msg, packet) {
             const t = parseLinkTopic(topic)
-            // ensure topic matches
-            if (!isDynamicTopic && node.subTopic !== t.subTopic) {
+            const eventId = packet?.properties?.correlationData?.toString()
+            // ensure topic matches. A dynamic topic listens for every response sent to this instance,
+            // so only handle the response to a call made by this node, on the topic it was made on
+            if (isDynamicTopic ? messageEvents[eventId]?.subTopic !== t.subTopic : node.subTopic !== t.subTopic) {
                 return
             }
             // check for error in processing the payload+packet → msg
@@ -1415,7 +1417,6 @@ module.exports = function (RED) {
                 node.error(err, msg)
                 return
             }
-            const eventId = packet?.properties?.correlationData?.toString()
             if (eventId && messageEvents[eventId]) {
                 node.returnLinkMessage(eventId, msg)
             }
