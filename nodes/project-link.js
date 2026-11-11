@@ -219,6 +219,33 @@ module.exports = function (RED) {
         })
     }
 
+    const TARGET_TYPE_STATIC = 'static'
+
+    // an instance id (uuid) or a remote instance id (`dev:<id>`). Anything else would change the shape of the topic
+    const VALID_TARGET_ID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|dev:[A-Za-z0-9]+)$/
+
+    /**
+     * Get the id of the target of a node whose target is evaluated per message (`msg` or `env`).
+     * FlowFuse is not asked if the target exists, so sending does not depend on it being reachable.
+     * @param {object} node - the node (`targetType` and `targetValue` are read from it)
+     * @param {object} msg - the message being processed
+     * @returns {string} the target id
+     * @throws if the target is missing or is not a valid instance id
+     */
+    function resolveTarget (node, msg) {
+        const source = `${node.targetType}.${node.targetValue}`
+        let id
+        try {
+            id = RED.util.evaluateNodeProperty(node.targetValue, node.targetType, node, msg)
+        } catch (err) {
+            throw new Error(`Unable to read target from ${source}: ${err.message}`)
+        }
+        if (typeof id !== 'string' || !VALID_TARGET_ID.test(id)) {
+            throw new Error(`Invalid target: ${source} must be the id of an instance`)
+        }
+        return id
+    }
+
     function jsonReplacer (_key, value) {
         const wrapper = (type, data) => { return { type, data } }
         if (typeof value === 'undefined') {
@@ -1134,6 +1161,8 @@ module.exports = function (RED) {
         const node = this
         node.ownId = OWNER_TYPE === 'application' ? 'dev:' + process.env.FF_DEVICE_ID : RED.settings.flowforge.projectID
         node.project = n.project
+        node.targetType = n.targetType || TARGET_TYPE_STATIC
+        node.targetValue = n.targetValue
         node.subTopic = n.topic
         node.mode = n.mode || 'link'
         // application broadcasts are saved as `broadcast: 'application'` so older versions of
@@ -1154,7 +1183,7 @@ module.exports = function (RED) {
         // When the out node is set to link mode and is targeting a specific project,
         // we should check the target exists in the platform
         let stopCheckingTarget = null
-        if (node.mode === 'link' && node.broadcast === false) {
+        if (node.mode === 'link' && node.broadcast === false && node.targetType === TARGET_TYPE_STATIC) {
             stopCheckingTarget = checkTarget(node, 'target', 'invalid target', data => {
                 // Check if the current project exists in the instances list
                 const projectExists = data.instances && data.instances.some(p => p.id === node.project)
@@ -1238,10 +1267,13 @@ module.exports = function (RED) {
                         throw applicationError
                     }
                     if (node.scope === SCOPE_APPLICATION && (!ownApplicationId || !supportsApplications)) {
+                        // null when no lookup is running & awaiting a null is a no-op (safely ignored)
+                        // getOwnApplicationId below throws if the application is still unknown
                         await instancesLookup
                     }
                     const applicationId = node.scope === SCOPE_APPLICATION ? getOwnApplicationId() : null
-                    const topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast, null, applicationId)
+                    const project = (!node.broadcast && node.targetType !== TARGET_TYPE_STATIC) ? resolveTarget(node, msg) : node.project
+                    const topic = buildLinkTopic(node, project, node.subTopic, node.broadcast, null, applicationId)
                     // ↓ Useful for debugging ↓
                     // console.log(`🔗 LINK-OUT PUB ${topic}`)
                     await mqtt.publish(node, topic, msg)
@@ -1279,8 +1311,12 @@ module.exports = function (RED) {
         const node = this
         node.ownId = OWNER_TYPE === 'application' ? 'dev:' + process.env.FF_DEVICE_ID : RED.settings.flowforge.projectID
         node.project = n.project
+        node.targetType = n.targetType || TARGET_TYPE_STATIC
+        node.targetValue = n.targetValue
         node.subTopic = n.topic
-        node.topic = buildLinkTopic(node, node.project, node.subTopic, false)
+        const isDynamicTarget = node.targetType !== TARGET_TYPE_STATIC
+        // the topic of a dynamic target is built per message
+        node.topic = isDynamicTarget ? null : buildLinkTopic(node, node.project, node.subTopic, false)
 
         if (RED.settings.flowforge.projectLink.useSharedSubscriptions) {
             node.responseTopicPrefix = `res-${crypto.randomBytes(4).toString('hex')}`
@@ -1331,17 +1367,19 @@ module.exports = function (RED) {
                     node.error(err)
                 })
 
-            stopCheckingTarget = checkTarget(node, 'target', 'invalid target', data => {
-                // Check if the current project exists in the instances list
-                const target = data.instances && data.instances.find(p => p.id === node.project)
-                node.targetName = target?.name
-                if (!target) {
-                    if (data.supportsApplications) {
-                        return `Selected target '${node.project}' not found in FlowFuse. A call can only target an instance in this team.`
+            if (!isDynamicTarget) {
+                stopCheckingTarget = checkTarget(node, 'target', 'invalid target', data => {
+                    // Check if the current project exists in the instances list
+                    const target = data.instances && data.instances.find(p => p.id === node.project)
+                    node.targetName = target?.name
+                    if (!target) {
+                        if (data.supportsApplications) {
+                            return `Selected target '${node.project}' not found in FlowFuse. A call can only target an instance in this team.`
+                        }
+                        return `Selected target '${node.project}' not found in FlowFuse. A call can only target a hosted instance in this team: a remote instance can make calls, but cannot receive them.`
                     }
-                    return `Selected target '${node.project}' not found in FlowFuse. A call can only target a hosted instance in this team: a remote instance can make calls, but cannot receive them.`
-                }
-            })
+                })
+            }
         }
 
         node.on('input', async function (msg, send, done) {
@@ -1349,6 +1387,12 @@ module.exports = function (RED) {
                 if (featureEnabled === false) {
                     done()
                     return
+                }
+                let topic = node.topic
+                let targetId = node.project
+                if (isDynamicTarget) {
+                    targetId = resolveTarget(node, msg)
+                    topic = buildLinkTopic(node, targetId, node.subTopic, false)
                 }
                 const eventId = crypto.randomBytes(14).toString('hex')
                 /** @type {MessageEvent} */
@@ -1369,7 +1413,8 @@ module.exports = function (RED) {
                 messageEvents[eventId] = {
                     ...messageEvent,
                     msg: RED.util.cloneMessage(msg),
-                    topic: node.topic,
+                    topic,
+                    targetId,
                     responseTopic: node.responseTopic,
                     send,
                     done,
@@ -1400,7 +1445,7 @@ module.exports = function (RED) {
                 }
                 // ↓ Useful for debugging ↓
                 // console.log(`🔗 LINK-CALL PUB ${node.topic}`)
-                await mqtt.publish(node, node.topic, msg, options)
+                await mqtt.publish(node, topic, msg, options)
             } catch (error) {
                 done(error)
             }
@@ -1454,7 +1499,7 @@ module.exports = function (RED) {
             if (messageEvent) {
                 delete messageEvents[eventId]
                 const seconds = Math.round(timeout / 100) / 10
-                const target = node.targetName ? `'${node.targetName}'` : `instance ${node.project}`
+                const target = node.targetName ? `'${node.targetName}'` : `instance ${messageEvent.targetId}`
                 node.error(`timeout after ${seconds}s waiting for a response from ${target} on topic '${node.subTopic}'. Check that the target instance is running and has a 'project link in' node listening on that topic.`, messageEvent.msg)
             }
         }
