@@ -267,7 +267,7 @@
         if (topicType === 'env') {
             return (nodeType === 'project link in' ? 'The topic to listen on, read when the flow starts.' : 'The topic to send on.') +
                 // eslint-disable-next-line no-template-curly-in-string
-                ' Use <code>${VAR}</code> to put an environment variable in a topic, for example <code>some/topic/${FF_DEVICE_NAME}</code>.' +
+                ' Enter a variable name, or use <code>${VAR}</code> to put an environment variable in a topic, for example <code>some/topic/${FF_DEVICE_NAME}</code>.' +
                 ' An error is raised if a variable is not set.'
         }
         return ''
@@ -719,7 +719,7 @@
                         return true
                     }
                     // otherwise, we need a valid project id
-                    return isValidProject(v, opt)
+                    return isValidProject.call(this, v, opt)
                 }
             },
             topicType: { value: TOPIC_TYPE_STATIC }, // str || msg || env
