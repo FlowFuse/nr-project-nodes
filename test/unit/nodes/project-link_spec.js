@@ -1,3 +1,4 @@
+/* eslint-disable no-template-curly-in-string */
 const should = require('should')
 const mocha = require('mocha') // eslint-disable-line no-unused-vars
 const sinon = require('sinon')

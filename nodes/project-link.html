@@ -266,6 +266,7 @@
         }
         if (topicType === 'env') {
             return (nodeType === 'project link in' ? 'The topic to listen on, read when the flow starts.' : 'The topic to send on.') +
+                // eslint-disable-next-line no-template-curly-in-string
                 ' Use <code>${VAR}</code> to put an environment variable in a topic, for example <code>some/topic/${FF_DEVICE_NAME}</code>.' +
                 ' An error is raised if a variable is not set.'
         }
