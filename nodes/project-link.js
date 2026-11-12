@@ -275,7 +275,10 @@ module.exports = function (RED) {
         } catch (err) {
             throw new Error(`Unable to read topic from ${source}: ${err.message}`)
         }
-        if (typeof topic !== 'string' || !isValid(buildLinkTopic(node, node.ownId, topic, false))) {
+        if (typeof topic !== 'string' || topic === '') {
+            throw new Error(`Invalid topic: ${source} is not set or is not a string`)
+        }
+        if (!isValid(buildLinkTopic(node, node.ownId, topic, false))) {
             throw new Error(`Invalid topic: ${source} must be a topic with no + # $ or empty levels`)
         }
         return topic

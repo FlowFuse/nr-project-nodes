@@ -1256,6 +1256,15 @@ describe('project-link node', function () {
                 await new Promise(resolve => setTimeout(resolve, 150))
                 node.error.called.should.be.false()
             })
+            it('should report a missing or non-string topic', async function () {
+                const { env, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                for (const topic of [undefined, '', 123]) {
+                    const done = sinon.fake()
+                    await nodeEvents.input({ payload: 'test', topic }, sinon.fake(), done)
+                    done.args[0][0].message.should.match(/Invalid topic: msg.topic is not set or is not a string/)
+                }
+                env.mqttStub.publish.called.should.be.false()
+            })
         })
     })
 
