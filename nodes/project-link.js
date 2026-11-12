@@ -246,6 +246,44 @@ module.exports = function (RED) {
         return id
     }
 
+    const TOPIC_TYPE_STATIC = 'str'
+    const TOPIC_TYPE_ENV = 'env'
+
+    /**
+     * Get the topic of a node whose topic is not entered in the editor (`msg` or `env`).
+     * @param {object} node - the node (`topicType` and `topicValue` are read from it)
+     * @param {object} msg - the message being processed (`null` when there is none)
+     * @param {function} isValid - tests the topic once it is part of a link topic
+     * @returns {string} the topic
+     * @throws if the topic cannot be read, an environment variable it uses is not set, or it is not a valid topic
+     */
+    function resolveTopic (node, msg, isValid) {
+        const source = `${node.topicType}.${node.topicValue}`
+        if (node.topicType === TOPIC_TYPE_ENV) {
+            // an unset variable is read as an empty string: `a/dev-${MISSING}` would quietly become the valid topic `a/dev-`
+            const references = [...String(node.topicValue).matchAll(/\$\{([^}]+)\}/g)].map(m => m[1])
+            for (const name of references.length ? references : [node.topicValue]) {
+                const value = RED.util.evaluateNodeProperty(name, TOPIC_TYPE_ENV, node, msg)
+                if (value === undefined || value === null || value === '') {
+                    throw new Error(`Unable to read topic from ${source}: environment variable '${name}' is not set`)
+                }
+            }
+        }
+        let topic
+        try {
+            topic = RED.util.evaluateNodeProperty(node.topicValue, node.topicType, node, msg)
+        } catch (err) {
+            throw new Error(`Unable to read topic from ${source}: ${err.message}`)
+        }
+        if (typeof topic !== 'string' || topic === '') {
+            throw new Error(`Invalid topic: ${source} is not set or is not a string`)
+        }
+        if (!isValid(buildLinkTopic(node, node.ownId, topic, false))) {
+            throw new Error(`Invalid topic: ${source} must be a topic with no + # $ or empty levels`)
+        }
+        return topic
+    }
+
     function jsonReplacer (_key, value) {
         const wrapper = (type, data) => { return { type, data } }
         if (typeof value === 'undefined') {
@@ -440,7 +478,14 @@ module.exports = function (RED) {
                 }
             }
 
-            if ((!directCallbacks || !directCallbacks.size) && (!broadcastCallbacks || !broadcastCallbacks.size)) {
+            // a call node with a dynamic topic listens for every response sent to it (`res[-id]/+/#`)
+            let responseCallbacks
+            const responseParts = (topic || '').split('/')
+            if (responseParts[3] === 'p' && responseParts[5]?.startsWith('res')) {
+                responseCallbacks = topicCallbackMap.get(responseParts.slice(0, 6).join('/') + '/+/#')
+            }
+
+            if ((!directCallbacks || !directCallbacks.size) && (!broadcastCallbacks || !broadcastCallbacks.size) && (!responseCallbacks || !responseCallbacks.size)) {
                 return // no callbacks registered for this topic
             }
 
@@ -473,6 +518,9 @@ module.exports = function (RED) {
                 cb && cb(err, topic, msg, packet)
             })
             broadcastCallbacks && broadcastCallbacks.forEach(cb => {
+                cb && cb(err, topic, msg, packet)
+            })
+            responseCallbacks && responseCallbacks.forEach(cb => {
                 cb && cb(err, topic, msg, packet)
             })
         }
@@ -993,13 +1041,27 @@ module.exports = function (RED) {
         const node = this
         node.ownId = OWNER_TYPE === 'application' ? 'dev:' + process.env.FF_DEVICE_ID : RED.settings.flowforge.projectID
         node.project = n.project
+        node.topicType = n.topicType || TOPIC_TYPE_STATIC
+        node.topicValue = n.topic
         node.subTopic = n.topic
         // application broadcast listeners are saved as `broadcast: 'application'` so older versions of
         // these nodes (which ignore `scope`) do not listen for team broadcasts instead
         node.broadcast = n.broadcast === true || n.broadcast === 'true' || n.broadcast === BROADCAST_APPLICATION
         node.scope = (node.broadcast && (n.scope === SCOPE_APPLICATION || n.broadcast === BROADCAST_APPLICATION)) ? SCOPE_APPLICATION : SCOPE_TEAM
         node.subscriptionIdentifier = (node.broadcast && n.project === 'all') ? 2 : 1
-        if (node.scope === SCOPE_TEAM) {
+        // the subscription is made when the node starts, so the topic can only be read from the environment
+        let topicError = null
+        if (node.topicType !== TOPIC_TYPE_STATIC) {
+            try {
+                if (node.topicType !== TOPIC_TYPE_ENV) {
+                    throw new Error(`Invalid topic: a ${node.topicType} topic cannot be used to receive messages`)
+                }
+                node.subTopic = resolveTopic(node, null, isValidSubscriptionTopic)
+            } catch (err) {
+                topicError = err
+            }
+        }
+        if (node.scope === SCOPE_TEAM && !topicError) {
             node.topic = buildLinkTopic(node, node.project, node.subTopic, node.broadcast)
         }
 
@@ -1008,6 +1070,10 @@ module.exports = function (RED) {
             configOk = false
             node.status({ fill: 'red', shape: 'dot', text: 'feature not available' })
             node.warn('Project Link feature is not available for your current Team.')
+        } else if (topicError) {
+            configOk = false
+            node.status({ fill: 'red', shape: 'dot', text: 'invalid topic' })
+            node.error(topicError.message)
         } else {
             mqtt.connect()
             mqtt.registerStatus(node)
@@ -1163,6 +1229,8 @@ module.exports = function (RED) {
         node.project = n.project
         node.targetType = n.targetType || TARGET_TYPE_STATIC
         node.targetValue = n.targetValue
+        node.topicType = n.topicType || TOPIC_TYPE_STATIC
+        node.topicValue = n.topic
         node.subTopic = n.topic
         node.mode = n.mode || 'link'
         // application broadcasts are saved as `broadcast: 'application'` so older versions of
@@ -1273,7 +1341,8 @@ module.exports = function (RED) {
                     }
                     const applicationId = node.scope === SCOPE_APPLICATION ? getOwnApplicationId() : null
                     const project = (!node.broadcast && node.targetType !== TARGET_TYPE_STATIC) ? resolveTarget(node, msg) : node.project
-                    const topic = buildLinkTopic(node, project, node.subTopic, node.broadcast, null, applicationId)
+                    const subTopic = node.topicType === TOPIC_TYPE_STATIC ? node.subTopic : resolveTopic(node, msg, isValidPublishTopic)
+                    const topic = buildLinkTopic(node, project, subTopic, node.broadcast, null, applicationId)
                     // ↓ Useful for debugging ↓
                     // console.log(`🔗 LINK-OUT PUB ${topic}`)
                     await mqtt.publish(node, topic, msg)
@@ -1313,17 +1382,22 @@ module.exports = function (RED) {
         node.project = n.project
         node.targetType = n.targetType || TARGET_TYPE_STATIC
         node.targetValue = n.targetValue
+        node.topicType = n.topicType || TOPIC_TYPE_STATIC
+        node.topicValue = n.topic
         node.subTopic = n.topic
         const isDynamicTarget = node.targetType !== TARGET_TYPE_STATIC
-        // the topic of a dynamic target is built per message
-        node.topic = isDynamicTarget ? null : buildLinkTopic(node, node.project, node.subTopic, false)
+        const isDynamicTopic = node.topicType !== TOPIC_TYPE_STATIC
+        // the topic of a dynamic target or topic is built per message
+        node.topic = (isDynamicTarget || isDynamicTopic) ? null : buildLinkTopic(node, node.project, node.subTopic, false)
 
         if (RED.settings.flowforge.projectLink.useSharedSubscriptions) {
             node.responseTopicPrefix = `res-${crypto.randomBytes(4).toString('hex')}`
         } else {
             node.responseTopicPrefix = 'res'
         }
-        node.responseTopic = buildLinkTopic(node, node.ownId, node.subTopic, false, node.responseTopicPrefix)
+        // a dynamic topic is not known until a message arrives, so listen for every response sent to this node and
+        // match each to its call using the correlation data. A static topic is listened for exactly
+        node.responseTopic = buildLinkTopic(node, node.ownId, isDynamicTopic ? '+/#' : node.subTopic, false, node.responseTopicPrefix)
         // node.responseTopic = buildLinkTopic(node, RED.settings.flowforge.projectID, node.subTopic, false, node.responseTopicPrefix)
         let timeout = parseFloat(n.timeout || '30') * 1000
         if (isNaN(timeout)) {
@@ -1335,8 +1409,10 @@ module.exports = function (RED) {
 
         function onSub (err, topic, msg, packet) {
             const t = parseLinkTopic(topic)
-            // ensure topic matches
-            if (node.subTopic !== t.subTopic) {
+            const eventId = packet?.properties?.correlationData?.toString()
+            // ensure topic matches. A dynamic topic listens for every response sent to this instance,
+            // so only handle the response to a call made by this node, on the topic it was made on
+            if (isDynamicTopic ? messageEvents[eventId]?.subTopic !== t.subTopic : node.subTopic !== t.subTopic) {
                 return
             }
             // check for error in processing the payload+packet → msg
@@ -1344,7 +1420,6 @@ module.exports = function (RED) {
                 node.error(err, msg)
                 return
             }
-            const eventId = packet?.properties?.correlationData?.toString()
             if (eventId && messageEvents[eventId]) {
                 node.returnLinkMessage(eventId, msg)
             }
@@ -1390,9 +1465,12 @@ module.exports = function (RED) {
                 }
                 let topic = node.topic
                 let targetId = node.project
+                const subTopic = isDynamicTopic ? resolveTopic(node, msg, isValidPublishTopic) : node.subTopic
                 if (isDynamicTarget) {
                     targetId = resolveTarget(node, msg)
-                    topic = buildLinkTopic(node, targetId, node.subTopic, false)
+                }
+                if (isDynamicTarget || isDynamicTopic) {
+                    topic = buildLinkTopic(node, targetId, subTopic, false)
                 }
                 const eventId = crypto.randomBytes(14).toString('hex')
                 /** @type {MessageEvent} */
@@ -1402,7 +1480,7 @@ module.exports = function (RED) {
                     project: RED.settings.flowforge.projectID,
                     instance: RED.settings.flowforge.instanceID,
                     application: ownApplicationId,
-                    topic: node.subTopic,
+                    topic: subTopic,
                     response: node.responseTopicPrefix,
                     ts: Date.now()
                 }
@@ -1414,6 +1492,7 @@ module.exports = function (RED) {
                     ...messageEvent,
                     msg: RED.util.cloneMessage(msg),
                     topic,
+                    subTopic,
                     targetId,
                     responseTopic: node.responseTopic,
                     send,
@@ -1456,7 +1535,8 @@ module.exports = function (RED) {
                 stopCheckingTarget()
                 stopCheckingTarget = null
             }
-            mqtt.unsubscribe(node, node.responseTopic)
+            // only remove this node's callback: call nodes with a dynamic topic share one subscription
+            mqtt.unsubscribe(node, node.responseTopic, onSub)
                 .then(() => {})
                 .catch(_err => {})
                 .finally(() => {
@@ -1500,7 +1580,7 @@ module.exports = function (RED) {
                 delete messageEvents[eventId]
                 const seconds = Math.round(timeout / 100) / 10
                 const target = node.targetName ? `'${node.targetName}'` : `instance ${messageEvent.targetId}`
-                node.error(`timeout after ${seconds}s waiting for a response from ${target} on topic '${node.subTopic}'. Check that the target instance is running and has a 'project link in' node listening on that topic.`, messageEvent.msg)
+                node.error(`timeout after ${seconds}s waiting for a response from ${target} on topic '${messageEvent.subTopic}'. Check that the target instance is running and has a 'project link in' node listening on that topic.`, messageEvent.msg)
             }
         }
     }

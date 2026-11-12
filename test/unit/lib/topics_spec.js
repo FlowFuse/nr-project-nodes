@@ -14,7 +14,9 @@ describe('topics', function () {
             `$share/instance-1/ff/v1/${TEAM}/p/instance-1/in/a`,
             `ff/v1/${TEAM}/a/${APP}/p/+/out/a/b`,
             `ff/v1/${TEAM}/a/${APP}/p/dev:device-1/out/a`,
-            `$share/instance-1/ff/v1/${TEAM}/a/${APP}/p/+/out/a`
+            `$share/instance-1/ff/v1/${TEAM}/a/${APP}/p/+/out/a`,
+            `ff/v1/${TEAM}/p/instance-1/res/+/#`, // every call response sent to an instance
+            `ff/v1/${TEAM}/p/dev:device-1/res-abc123/+/#`
         ]
         const invalid = [
             `ff/v1/${TEAM}/pa/${APP}/+/out/a`, // the old application topic shape
@@ -25,7 +27,11 @@ describe('topics', function () {
             `ff/v1/${TEAM}/p/+/out/a/#`, // multi-level wildcard
             `ff/v1/${TEAM}/p/+/out/a b`, // space
             `ff/v1/${TEAM}/p/+/out//a`, // empty level
-            `/ff/v1/${TEAM}/p/+/out/a` // leading slash
+            `/ff/v1/${TEAM}/p/+/out/a`, // leading slash
+            `ff/v1/${TEAM}/p/instance-1/in/+/#`, // wildcards are only for call responses
+            `ff/v1/${TEAM}/p/+/res/+/#`, // any source
+            `ff/v1/${TEAM}/p/instance-1/res/#`,
+            `ff/v1/${TEAM}/p/instance-1/res/+/+/#`
         ]
         valid.forEach(topic => {
             it(`accepts ${topic}`, function () {

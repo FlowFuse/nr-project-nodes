@@ -1,3 +1,4 @@
+/* eslint-disable no-template-curly-in-string */
 const should = require('should')
 const mocha = require('mocha') // eslint-disable-line no-unused-vars
 const sinon = require('sinon')
@@ -91,7 +92,10 @@ describe('project-link node', function () {
                         return value.split('.').reduce((obj, key) => obj?.[key], msg)
                     }
                     if (type === 'env') {
-                        return process.env[value]
+                        // a bare name, or a template such as `a/${NAME}/b` (an unset variable is an empty string)
+                        return /\$\{[^}]+\}/.test(value)
+                            ? value.replace(/\$\{([^}]+)\}/g, (_match, name) => process.env[name] ?? '')
+                            : process.env[value]
                     }
                     throw new Error(`unsupported type ${type}`)
                 }
@@ -952,6 +956,313 @@ describe('project-link node', function () {
                 const done = sinon.fake()
                 await nodeEvents.input({ payload: 'test' }, sinon.fake(), done)
                 done.args[0][0].message.should.match(/Invalid target: msg.target/)
+                env.mqttStub.publish.called.should.be.false()
+            })
+        })
+    })
+
+    describe('Dynamic topic', function () {
+        const OTHER_ID = '12345678-5555-6666-7777-8888abcdef12'
+        const instances = [
+            { id: PROJECT_ID, name: 'A-PROJECT' },
+            { id: OTHER_ID, name: 'OTHER-PROJECT' }
+        ]
+
+        function create (type, config) {
+            const env = setup()
+            const nodeEvents = {}
+            const node = {
+                on: (event, cb) => { nodeEvents[event] = cb },
+                error: sinon.fake(),
+                warn: sinon.fake(),
+                status: sinon.fake(),
+                receive: sinon.fake(),
+                type
+            }
+            const getInstances = sinon.stub().resolves({ count: instances.length, instances })
+            InstancesApi.InstancesApi = sinon.stub().returns({ getInstances })
+            projectLinkPackage(env.RED)
+            env.nodes[type].NodeConstructor.call(node, { timeout: 0.05, ...config })
+            return { env, node, nodeEvents }
+        }
+
+        afterEach(function () {
+            delete process.env.TEST_LINK_TOPIC
+            delete process.env.TEST_LINK_DEVICE
+        })
+
+        describe('project link in', function () {
+            it('should listen on a topic from an environment variable', function () {
+                process.env.TEST_LINK_TOPIC = 'a/b'
+                const { env, node } = create('project link in', { topicType: 'env', topic: 'TEST_LINK_TOPIC' })
+                node.subTopic.should.equal('a/b')
+                env.mqttStub.subscribe.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/a/b`)
+            })
+            it('should listen on a topic built from an environment variable template', function () {
+                process.env.TEST_LINK_DEVICE = 'device-1'
+                const { env } = create('project link in', { topicType: 'env', topic: 'some/topic/${TEST_LINK_DEVICE}/status' })
+                env.mqttStub.subscribe.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/some/topic/device-1/status`)
+            })
+            it('should still listen on a topic that was entered', function () {
+                const { env } = create('project link in', { topic: 'a/b' })
+                env.mqttStub.subscribe.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/in/a/b`)
+            })
+            for (const [name, topic] of [
+                ['not set', '${TEST_LINK_DEVICE}/status'],
+                ['not set when part of a name', 'a/device-${TEST_LINK_DEVICE}'],
+                ['not set when it is the whole topic', 'TEST_LINK_DEVICE']
+            ]) {
+                it(`should not subscribe when the environment variable is ${name}`, function () {
+                    const { env, node } = create('project link in', { topicType: 'env', topic })
+                    env.mqttStub.subscribe.called.should.be.false()
+                    node.error.calledOnce.should.be.true()
+                    node.error.args[0][0].should.match(/'TEST_LINK_DEVICE' is not set/)
+                    node.status.lastCall.args[0].should.have.property('text', 'invalid topic')
+                })
+            }
+            it('should not subscribe when the topic is not valid', function () {
+                process.env.TEST_LINK_TOPIC = 'a/+/b'
+                const { env, node } = create('project link in', { topicType: 'env', topic: 'TEST_LINK_TOPIC' })
+                env.mqttStub.subscribe.called.should.be.false()
+                node.error.args[0][0].should.match(/Invalid topic: env.TEST_LINK_TOPIC/)
+            })
+            it('should not subscribe when the topic is read from a msg', function () {
+                const { env, node } = create('project link in', { topicType: 'msg', topic: 'topic' })
+                env.mqttStub.subscribe.called.should.be.false()
+                node.error.args[0][0].should.match(/cannot be used to receive messages/)
+            })
+        })
+
+        describe('project link out', function () {
+            it('should send on the topic in a msg property', async function () {
+                const { env, nodeEvents } = create('project link out', { mode: 'link', project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                const done = sinon.fake()
+                await nodeEvents.input({ payload: 'test', topic: 'x/y' }, sinon.fake(), done)
+                done.calledOnceWithExactly().should.be.true()
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${OTHER_ID}/in/x/y`)
+            })
+            it('should send on a different topic for each message', async function () {
+                const { env, nodeEvents } = create('project link out', { mode: 'link', broadcast: true, topicType: 'msg', topic: 'payload.to' })
+                await nodeEvents.input({ payload: { to: 'a/b' } }, sinon.fake(), sinon.fake())
+                await nodeEvents.input({ payload: { to: 'c' } }, sinon.fake(), sinon.fake())
+                env.mqttStub.publish.args.map(args => args[0]).should.eql([
+                    `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/out/a/b`,
+                    `ff/v1/${TEAM_ID}/p/${PROJECT_ID}/out/c`
+                ])
+            })
+            it('should send on the topic in an environment variable template', async function () {
+                process.env.TEST_LINK_DEVICE = 'device-1'
+                const { env, nodeEvents } = create('project link out', { mode: 'link', project: OTHER_ID, topicType: 'env', topic: 'some/${TEST_LINK_DEVICE}/status' })
+                await nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${OTHER_ID}/in/some/device-1/status`)
+            })
+            it('should send to a dynamic target on a dynamic topic', async function () {
+                const { env, nodeEvents } = create('project link out', { mode: 'link', targetType: 'msg', targetValue: 'target', topicType: 'msg', topic: 'topic' })
+                await nodeEvents.input({ payload: 'test', target: OTHER_ID, topic: 'x/y' }, sinon.fake(), sinon.fake())
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${OTHER_ID}/in/x/y`)
+            })
+            for (const [name, msg] of [
+                ['missing', { payload: 'test' }],
+                ['not a string', { payload: 'test', topic: 123 }],
+                ['empty', { payload: 'test', topic: '' }],
+                ['a wildcard', { payload: 'test', topic: 'a/#' }],
+                ['a single level wildcard', { payload: 'test', topic: 'a/+/b' }],
+                ['a system topic', { payload: 'test', topic: '$SYS/a' }],
+                ['an empty level', { payload: 'test', topic: 'a//b' }],
+                ['a leading slash', { payload: 'test', topic: '/a' }]
+            ]) {
+                it(`should error when the topic is ${name}`, async function () {
+                    const { env, nodeEvents } = create('project link out', { mode: 'link', project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                    const done = sinon.fake()
+                    await nodeEvents.input(msg, sinon.fake(), done)
+                    done.calledOnce.should.be.true()
+                    done.args[0][0].message.should.match(/Invalid topic: msg.topic/)
+                    env.mqttStub.publish.called.should.be.false()
+                })
+            }
+            it('should error when an environment variable in the topic is not set', async function () {
+                const { env, nodeEvents } = create('project link out', { mode: 'link', project: OTHER_ID, topicType: 'env', topic: 'a/device-${TEST_LINK_DEVICE}' })
+                const done = sinon.fake()
+                await nodeEvents.input({ payload: 'test' }, sinon.fake(), done)
+                done.args[0][0].message.should.match(/environment variable 'TEST_LINK_DEVICE' is not set/)
+                env.mqttStub.publish.called.should.be.false()
+            })
+            it('should ignore the topic type when returning a call', async function () {
+                const { env, nodeEvents } = create('project link out', { mode: 'return', topicType: 'msg', topic: 'topic' })
+                const msg = { payload: 'test', projectLink: { callStack: [{ project: OTHER_ID, topic: 'x/y', eventId: 'e1', response: 'res' }] } }
+                const done = sinon.fake()
+                await nodeEvents.input(msg, sinon.fake(), done)
+                done.calledOnceWithExactly().should.be.true()
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${OTHER_ID}/res/x/y`)
+            })
+        })
+
+        describe('project link call', function () {
+            it('should listen for every response sent to it', function () {
+                const { env, node } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                should(node.topic).be.null()
+                node.responseTopic.should.equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/+/#`)
+                env.mqttStub.subscribe.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/+/#`)
+            })
+            it('should listen for the response to a topic that was entered', function () {
+                const { env } = create('project link call', { project: OTHER_ID, topic: 'a/b' })
+                env.mqttStub.subscribe.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/a/b`)
+            })
+            it('should listen for the responses of this node only in HA mode', function () {
+                const env = setup({ haMode: true })
+                InstancesApi.InstancesApi = sinon.stub().returns({ getInstances: sinon.stub().resolves({ count: 0, instances: [] }) })
+                projectLinkPackage(env.RED)
+                const node = { on: sinon.fake(), error: sinon.fake(), warn: sinon.fake(), status: sinon.fake(), type: 'project link call' }
+                env.nodes['project link call'].NodeConstructor.call(node, { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                node.responseTopic.should.match(new RegExp(`^ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res-[0-9a-f]{8}/\\+/#$`))
+            })
+            it('should call on the topic in a msg property', async function () {
+                const { env, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                await nodeEvents.input({ payload: 'test', topic: 'x/y' }, sinon.fake(), sinon.fake())
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${OTHER_ID}/in/x/y`)
+                const pubMessage = JSON.parse(env.mqttStub.publish.args[0][1])
+                pubMessage.projectLink.callStack[0].should.have.property('topic', 'x/y')
+            })
+            it('should call on the topic in an environment variable template', async function () {
+                process.env.TEST_LINK_DEVICE = 'device-1'
+                const { env, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'env', topic: 'some/${TEST_LINK_DEVICE}/status' })
+                await nodeEvents.input({ payload: 'test' }, sinon.fake(), sinon.fake())
+                env.mqttStub.publish.args[0][0].should.equal(`ff/v1/${TEAM_ID}/p/${OTHER_ID}/in/some/device-1/status`)
+                // the call stack holds the topic that was used, not the template
+                const pubMessage = JSON.parse(env.mqttStub.publish.args[0][1])
+                pubMessage.projectLink.callStack[0].should.have.property('topic', 'some/device-1/status')
+            })
+            it('should put the topic of a dynamic target and topic in the call stack', async function () {
+                const { env, nodeEvents } = create('project link call', { targetType: 'msg', targetValue: 'target', topicType: 'msg', topic: 'topic' })
+                await nodeEvents.input({ payload: 'test', target: OTHER_ID, topic: 'x/y' }, sinon.fake(), sinon.fake())
+                const pubMessage = JSON.parse(env.mqttStub.publish.args[0][1])
+                pubMessage.projectLink.callStack[0].should.have.property('topic', 'x/y')
+            })
+            it('should put the response prefix it listens on in the call stack in HA mode', async function () {
+                const env = setup({ haMode: true })
+                InstancesApi.InstancesApi = sinon.stub().returns({ getInstances: sinon.stub().resolves({ count: 0, instances: [] }) })
+                projectLinkPackage(env.RED)
+                const events = {}
+                const node = { on: (event, cb) => { events[event] = cb }, error: sinon.fake(), warn: sinon.fake(), status: sinon.fake(), type: 'project link call' }
+                env.nodes['project link call'].NodeConstructor.call(node, { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                await events.input({ payload: 'test', topic: 'x/y' }, sinon.fake(), sinon.fake())
+                const entry = JSON.parse(env.mqttStub.publish.args[0][1]).projectLink.callStack[0]
+                entry.response.should.match(/^res-[0-9a-f]{8}$/)
+                node.responseTopic.should.equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/${entry.response}/+/#`)
+            })
+            it('should receive the reply that a return node sends for its call', async function () {
+                const env = setup()
+                InstancesApi.InstancesApi = sinon.stub().returns({ getInstances: sinon.stub().resolves({ count: 0, instances: [] }) })
+                projectLinkPackage(env.RED)
+                const make = (type, config) => {
+                    const events = {}
+                    const node = { on: (event, cb) => { events[event] = cb }, error: sinon.fake(), warn: sinon.fake(), status: sinon.fake(), type }
+                    env.nodes[type].NodeConstructor.call(node, { timeout: 0.05, ...config })
+                    return events
+                }
+                const call = make('project link call', { project: PROJECT_ID, topicType: 'msg', topic: 'topic' })
+                const back = make('project link out', { mode: 'return' })
+                const send = sinon.fake()
+                await call.input({ payload: 'test', topic: 'x/y' }, send, sinon.fake())
+                // the call arrives at the other end with its call stack, and is returned
+                const received = JSON.parse(env.mqttStub.publish.args[0][1])
+                received.payload = 'reply'
+                await back.input(received, sinon.fake(), sinon.fake())
+                const [replyTopic, replyMessage, replyOptions] = env.mqttStub.publish.args[1]
+                replyTopic.should.equal(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/x/y`)
+                // deliver it as the broker would, to the filter the call node listens on
+                const onMessage = env.mqttStub.on.args.find(args => args[0] === 'message')[1]
+                onMessage(replyTopic, Buffer.from(replyMessage), { properties: { correlationData: Buffer.from(replyOptions.properties.correlationData) } })
+                send.calledOnce.should.be.true()
+                send.args[0][0].should.have.property('payload', 'reply')
+            })
+            it('should send the response of a call on any topic to the message that made the call', async function () {
+                const { env, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                const send = sinon.fake()
+                const done = sinon.fake()
+                await nodeEvents.input({ payload: 'test', topic: 'x/y' }, send, done)
+                const sent = JSON.parse(env.mqttStub.publish.args[0][1])
+                const eventId = sent.projectLink.callStack[0].eventId
+                // the response arrives on the topic that was called, which only the wildcard subscription matches
+                const onMessage = env.mqttStub.on.args.find(args => args[0] === 'message')[1]
+                const response = Buffer.from(JSON.stringify({ payload: 'reply', projectLink: {} }))
+                onMessage(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/x/y`, response, { properties: { correlationData: Buffer.from(eventId) } })
+                send.calledOnce.should.be.true()
+                send.args[0][0].should.have.property('payload', 'reply')
+                done.calledOnce.should.be.true()
+            })
+            it('should keep receiving responses when another call node with a dynamic topic is closed', async function () {
+                const env = setup()
+                InstancesApi.InstancesApi = sinon.stub().returns({ getInstances: sinon.stub().resolves({ count: 0, instances: [] }) })
+                projectLinkPackage(env.RED)
+                const make = () => {
+                    const events = {}
+                    const node = { on: (event, cb) => { events[event] = cb }, error: sinon.fake(), warn: sinon.fake(), status: sinon.fake(), type: 'project link call' }
+                    env.nodes['project link call'].NodeConstructor.call(node, { project: OTHER_ID, topicType: 'msg', topic: 'topic', timeout: 0.05 })
+                    return events
+                }
+                const first = make()
+                const second = make()
+                const send = sinon.fake()
+                await first.input({ payload: 'test', topic: 'x/y' }, send, sinon.fake())
+                const eventId = JSON.parse(env.mqttStub.publish.args[0][1]).projectLink.callStack[0].eventId
+                await new Promise(resolve => second.close(resolve))
+                // the filter is still needed by the first node
+                env.mqttStub.unsubscribe.called.should.be.false()
+                const onMessage = env.mqttStub.on.args.find(args => args[0] === 'message')[1]
+                const response = Buffer.from(JSON.stringify({ payload: 'reply', projectLink: {} }))
+                onMessage(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/x/y`, response, { properties: { correlationData: Buffer.from(eventId) } })
+                send.calledOnce.should.be.true()
+                send.args[0][0].should.have.property('payload', 'reply')
+            })
+            it('should ignore a response to its call that arrives on another topic', async function () {
+                const { env, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                const send = sinon.fake()
+                await nodeEvents.input({ payload: 'test', topic: 'x/y' }, send, sinon.fake())
+                const eventId = JSON.parse(env.mqttStub.publish.args[0][1]).projectLink.callStack[0].eventId
+                const onMessage = env.mqttStub.on.args.find(args => args[0] === 'message')[1]
+                const response = Buffer.from(JSON.stringify({ payload: 'reply', projectLink: {} }))
+                onMessage(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/x/z`, response, { properties: { correlationData: Buffer.from(eventId) } })
+                send.called.should.be.false()
+            })
+            it('should not report an unreadable response to a call it did not make', async function () {
+                const { env, node } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                const onMessage = env.mqttStub.on.args.find(args => args[0] === 'message')[1]
+                onMessage(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/x/y`, Buffer.from('not json'), { properties: { correlationData: Buffer.from('another') } })
+                node.error.called.should.be.false()
+            })
+            it('should ignore a response to another call', async function () {
+                const { env, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                const send = sinon.fake()
+                await nodeEvents.input({ payload: 'test', topic: 'x/y' }, send, sinon.fake())
+                const onMessage = env.mqttStub.on.args.find(args => args[0] === 'message')[1]
+                const response = Buffer.from(JSON.stringify({ payload: 'reply', projectLink: {} }))
+                onMessage(`ff/v1/${TEAM_ID}/p/${PROJECT_ID}/res/x/y`, response, { properties: { correlationData: Buffer.from('another') } })
+                send.called.should.be.false()
+            })
+            it('should name the dynamic topic when a call times out', async function () {
+                const { node, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                await nodeEvents.input({ payload: 'test', topic: 'x/y' }, sinon.fake(), sinon.fake())
+                await new Promise(resolve => setTimeout(resolve, 150))
+                node.error.calledOnce.should.be.true()
+                node.error.args[0][0].should.match(/on topic 'x\/y'/)
+            })
+            it('should error without waiting for a response when the topic is not valid', async function () {
+                const { env, node, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                const done = sinon.fake()
+                await nodeEvents.input({ payload: 'test', topic: 'a/#' }, sinon.fake(), done)
+                done.args[0][0].message.should.match(/Invalid topic: msg.topic/)
+                env.mqttStub.publish.called.should.be.false()
+                await new Promise(resolve => setTimeout(resolve, 150))
+                node.error.called.should.be.false()
+            })
+            it('should report a missing or non-string topic', async function () {
+                const { env, nodeEvents } = create('project link call', { project: OTHER_ID, topicType: 'msg', topic: 'topic' })
+                for (const topic of [undefined, '', 123]) {
+                    const done = sinon.fake()
+                    await nodeEvents.input({ payload: 'test', topic }, sinon.fake(), done)
+                    done.args[0][0].message.should.match(/Invalid topic: msg.topic is not set or is not a string/)
+                }
                 env.mqttStub.publish.called.should.be.false()
             })
         })

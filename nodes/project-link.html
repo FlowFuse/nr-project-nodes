@@ -17,7 +17,8 @@
     }
     /* line the tip up with the inputs above it. Width is relative to the row (like the inputs),
        never a fixed or minimum width, so the edit tray can still be made narrower */
-    #dialog-form > div.form-row.ff-project-link-tip-row > .form-tips {
+    #dialog-form > div.form-row.ff-project-link-tip-row > .form-tips,
+    #dialog-form > div.form-row.ff-project-link-topic-tip-row > .form-tips {
         margin-left: 105px;
         width: calc(100% - 125px);
         max-width: none;
@@ -28,7 +29,8 @@
         /* just under the default so the tips do not wrap at the narrowest tray width */
         font-size: 12.5px;
     }
-    #dialog-form > div.form-row.ff-project-link-tip-row > .form-tips ul {
+    #dialog-form > div.form-row.ff-project-link-tip-row > .form-tips ul,
+    #dialog-form > div.form-row.ff-project-link-topic-tip-row > .form-tips ul {
         margin: 4px 0;
         padding-left: 20px;
     }
@@ -74,7 +76,11 @@
     </div>
     <div class="form-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Topic</span></label>
-        <input type="text" id="node-input-topic" class="ff-project-link-input-width">
+        <input type="hidden" id="node-input-topicType">
+        <input type="text" id="node-input-topic" style="width: calc(100% - 125px)">
+    </div>
+    <div class="form-row ff-project-link-topic-tip-row">
+        <div class="form-tips" id="ff-project-link-topic-tip"></div>
     </div>
 </script>
 
@@ -131,7 +137,11 @@
     </div>
     <div class="form-row ff-project-link-topic-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Topic</span></label>
-        <input type="text" id="node-input-topic" class="ff-project-link-input-width">
+        <input type="hidden" id="node-input-topicType">
+        <input type="text" id="node-input-topic" style="width: calc(100% - 125px)">
+    </div>
+    <div class="form-row ff-project-link-topic-tip-row">
+        <div class="form-tips" id="ff-project-link-topic-tip"></div>
     </div>
 </script>
 <script type="text/html" data-template-name="project link call">
@@ -163,7 +173,11 @@
     </div>
     <div class="form-row">
         <label for="node-input-topic"><i class="fa fa-ellipsis-h"></i> <span>Topic</span></label>
-        <input type="text" id="node-input-topic" class="ff-project-link-input-width">
+        <input type="hidden" id="node-input-topicType">
+        <input type="text" id="node-input-topic" style="width: calc(100% - 125px)">
+    </div>
+    <div class="form-row ff-project-link-topic-tip-row">
+        <div class="form-tips" id="ff-project-link-topic-tip"></div>
     </div>
 </script>
 
@@ -171,6 +185,7 @@
 /* global RED, $ */
 (function () {
     const TARGET_TYPE_STATIC = 'static' // the target is the instance selected in the editor
+    const TOPIC_TYPE_STATIC = 'str' // the topic is the text entered in the editor
     const SCOPE_TEAM = 'team'
     const SCOPE_APPLICATION = 'application'
     // Application broadcasts are saved as `broadcast: 'application'` rather than `true` on project link
@@ -216,6 +231,46 @@
             return opt ? 'No target property specified' : false
         }
         return true
+    }
+
+    /**
+     * Validate the topic. Only a topic typed into the editor can be checked here: the
+     * topic of a `msg` or `env` is not known until the flow is running
+     * @param {string} value - the topic, or the msg property / environment variable it is read from
+     * @param {object} [opt] - passed by Node-RED when it wants a reason, returned as the validation message
+     * @returns {boolean|string} `true` if valid, otherwise `false` (or the reason when `opt` is given)
+     */
+    function isValidTopicValue (value, opt) {
+        if (this.mode === 'return') {
+            return true
+        }
+        const type = this.topicType || TOPIC_TYPE_STATIC
+        if (type === TOPIC_TYPE_STATIC) {
+            const valid = this.type === 'project link in' ? isValidSubscriptionTopic(value) : isValidPublishTopic(value)
+            return valid || (opt ? 'Invalid topic' : false)
+        }
+        if (!value) {
+            return opt ? (type === 'msg' ? 'No topic property specified' : 'No topic environment variable specified') : false
+        }
+        return true
+    }
+
+    /** The label of the node for its topic */
+    function topicLabel (node) {
+        return (node.topicType === 'msg' && node.topic) ? `msg.${node.topic}` : node.topic
+    }
+
+    function topicTip (nodeType, topicType) {
+        if (topicType === 'msg') {
+            return 'The topic to send on, read from the message. An error is raised if it is missing or not a valid topic.'
+        }
+        if (topicType === 'env') {
+            return (nodeType === 'project link in' ? 'The topic to listen on, read when the flow starts.' : 'The topic to send on.') +
+                // eslint-disable-next-line no-template-curly-in-string
+                ' Enter a variable name, or use <code>${VAR}</code> to put an environment variable in a topic, for example <code>some/topic/${FF_DEVICE_NAME}</code>.' +
+                ' An error is raised if a variable is not set.'
+        }
+        return ''
     }
 
     const DYNAMIC_TARGET_TIP = 'The id of the hosted or remote instance to send to.' +
@@ -267,6 +322,7 @@
         let scope = (node.scope === SCOPE_APPLICATION || node.broadcast === BROADCAST_APPLICATION) ? SCOPE_APPLICATION : SCOPE_TEAM
         let selected = node.project
         let dynamicTargetType = node.targetType || TARGET_TYPE_STATIC
+        let topicType = node.topicType || TOPIC_TYPE_STATIC
         /** Target data from the runtime. `null` until loaded */
         let data = null
 
@@ -300,6 +356,24 @@
                 updateUI()
             })
         }
+
+        // the topic can be read from the environment, or (when sending) from a msg property.
+        // A listener subscribes when it starts, so it cannot read its topic from a message
+        $('#node-input-topicType').val(topicType)
+        $('#node-input-topic').typedInput({
+            types: nodeType === 'project link in' ? [TOPIC_TYPE_STATIC, 'env'] : [TOPIC_TYPE_STATIC, 'msg', 'env'],
+            typeField: '#node-input-topicType'
+        })
+        $('#node-input-topic').on('change', function (_event, type) {
+            const newType = type || $('#node-input-topicType').val() || TOPIC_TYPE_STATIC
+            if (newType !== topicType) {
+                topicType = newType
+                if (topicType === 'msg') {
+                    $(this).typedInput('value', 'topic')
+                }
+            }
+            updateUI()
+        })
 
         // watch for switch between broadcast and p2p
         $('input:radio[name="ff-project-link-broadcast"]').on('change', function (e) {
@@ -533,6 +607,10 @@
             $('#ff-project-link-scope-tip').html(tip)
             tipRow.toggle(!!tip)
 
+            const topicTip$ = nodeType === 'project link out' && isReturnMode ? '' : topicTip(nodeType, topicType)
+            $('#ff-project-link-topic-tip').html(topicTip$)
+            $('.ff-project-link-topic-tip-row').toggle(!!topicTip$)
+
             if (projectList.prop('disabled')) {
                 // if the project list is disabled, we cannot select a bad option
                 projectList.removeClass('input-error')
@@ -595,7 +673,8 @@
             },
             broadcast: { value: false, required: true },
             scope: { value: SCOPE_TEAM }, // team || application (only used when broadcast is true)
-            topic: { value: '', required: true, validate: isValidSubscriptionTopic }
+            topicType: { value: TOPIC_TYPE_STATIC }, // str || env
+            topic: { value: '', validate: isValidTopicValue }
         },
         inputs: 0,
         outputs: 1,
@@ -606,7 +685,7 @@
         },
         // showLabel: false,
         label: function () {
-            return this.name || this.topic || 'link in'
+            return this.name || topicLabel(this) || 'link in'
         },
         labelStyle: function () {
             return this.name ? 'node_label_italic' : ''
@@ -640,18 +719,11 @@
                         return true
                     }
                     // otherwise, we need a valid project id
-                    return isValidProject(v, opt)
+                    return isValidProject.call(this, v, opt)
                 }
             },
-            topic: {
-                value: '',
-                validate: function (v) {
-                    if (this.mode === 'return') {
-                        return true
-                    }
-                    return v && isValidPublishTopic(v)
-                }
-            }
+            topicType: { value: TOPIC_TYPE_STATIC }, // str || msg || env
+            topic: { value: '', validate: isValidTopicValue }
         },
         align: 'right',
         inputs: 1,
@@ -669,7 +741,7 @@
         },
         // showLabel: false,
         label: function () {
-            return this.name || (this.mode === 'return' ? 'link return' : this.topic) || 'link out'
+            return this.name || (this.mode === 'return' ? 'link return' : topicLabel(this)) || 'link out'
         },
         labelStyle: function () {
             return this.name ? 'node_label_italic' : ''
@@ -697,7 +769,8 @@
             targetType: { value: TARGET_TYPE_STATIC }, // static || msg || env
             targetValue: { value: '', validate: isValidTargetValue },
             project: { value: '', validate: isValidProject }, // isValidProject handles empty, so its reason is shown
-            topic: { value: '', required: true, validate: isValidPublishTopic },
+            topicType: { value: TOPIC_TYPE_STATIC }, // str || msg || env
+            topic: { value: '', validate: isValidTopicValue },
             timeout: {
                 value: '5',
                 label: RED._('node-red:link.timeout'),
@@ -712,7 +785,7 @@
             return this.name || 'link call'
         },
         label: function () {
-            return this.name || this.topic || 'link call'
+            return this.name || topicLabel(this) || 'link call'
         },
         labelStyle: function () {
             return this.name ? 'node_label_italic' : ''
@@ -737,6 +810,10 @@
        subscribers.</p>
     <p>The node does not support MQTT wildcard characters - a fully qualified topic
        must be used.</p>
+    <p>The topic can be read from an environment variable: set <b>Topic</b> to <code>env</code> and
+       the name of a variable, or a template such as <code>some/topic/${FF_DEVICE_NAME}/status</code>.
+       It is read when the node starts. If a variable it uses is not set, or the topic is not valid,
+       the node reports an error and does not listen.</p>
     <h3>Broadcast channels</h3>
     <p>When listening for broadcast messages, choose the channel to listen on:</p>
     <ul>
@@ -807,6 +884,12 @@
         subscribers.
     </p>
     <p>
+        The topic can also be chosen when a message is sent: set <b>Topic</b> to <code>msg.</code>
+        and a property name (the default is <code>msg.topic</code>), or to <code>env</code> and the name
+        of an environment variable or a template such as <code>some/topic/${FF_DEVICE_NAME}/status</code>.
+        An error is raised if the topic is missing, is not valid, or uses a variable that is not set.
+    </p>
+    <p>
         The target can be chosen when a message is sent: set <b>Target</b> to <code>msg.</code>
         and a property name (for example <code>msg.target</code>), or to <code>env</code> and the name
         of an environment variable. An <code>env</code> value can also be a template filled
@@ -863,6 +946,12 @@
         The node is configured with a <code>topic</code> to send on. This works
         like an MQTT topic - allowing instances to send messages targeting different
         subscribers.
+    </p>
+    <p>
+        The topic can also be chosen when a message is sent: set <b>Topic</b> to <code>msg.</code>
+        and a property name (the default is <code>msg.topic</code>), or to <code>env</code> and the name
+        of an environment variable or a template such as <code>some/topic/${FF_DEVICE_NAME}/status</code>.
+        An error is raised if the topic is missing, is not valid, or uses a variable that is not set.
     </p>
     <p>
         The target can be chosen when a message is sent: set <b>Target</b> to <code>msg.</code>
