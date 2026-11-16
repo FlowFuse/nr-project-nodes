@@ -1,14 +1,6 @@
 # CHANGELOG
 
-## [1.0.0](https://github.com/FlowFuse/nr-project-nodes/compare/v0.8.0...v1.0.0) (2026-11-16)
-
-
-### Miscellaneous Chores
-
-* release 1.0.0 ([#316](https://github.com/FlowFuse/nr-project-nodes/issues/316)) ([c61c6ba](https://github.com/FlowFuse/nr-project-nodes/commit/c61c6baf6ef041cc2ede0dd5146d8eb5382c0c49))
-
-## [0.8.0](https://github.com/FlowFuse/nr-project-nodes/compare/v0.7.9...v0.8.0) (2026-11-12)
-
+## [1.0.0](https://github.com/FlowFuse/nr-project-nodes/compare/v0.7.9...v1.0.0) (2026-11-12)
 
 ### Features
 
