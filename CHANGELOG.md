@@ -1,7 +1,6 @@
 # CHANGELOG
 
-## [0.8.0](https://github.com/FlowFuse/nr-project-nodes/compare/v0.7.9...v0.8.0) (2026-11-12)
-
+## [1.0.0](https://github.com/FlowFuse/nr-project-nodes/compare/v0.7.9...v1.0.0) (2026-11-12)
 
 ### Features
 
